@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="page_background">#F5F8FF</color>
+    <color name="surface_primary">#FCFEFF</color>
+    <color name="card_stroke">#D9E3F2</color>
+    <color name="brand_primary">#5E78F6</color>
+    <color name="accent_match">#59B89F</color>
+    <color name="text_primary">#202534</color>
+    <color name="text_secondary">#667085</color>
+    <color name="text_body">#4A5567</color>
+    <color name="text_on_media">#F9FBFF</color>
+    <color name="image_placeholder">#EEF3F8</color>
+    <color name="preview_scrim">#1F1B2A46</color>
+    <color name="glass_button_background">#CCFFFFFF</color>
+    <color name="glass_button_stroke">#80FFFFFF</color>
+    <color name="glass_button_ripple">#265E78F6</color>
+    <color name="chip_match_background">#E8F7F3</color>
+    <color name="chip_brand_background">#EBF1FF</color>
+    <color name="chip_brand_background_emphasis">#F3F6FF</color>
+    <color name="scanline_color">#CC59B89F</color>
+    <color name="cta_ripple">#33FFFFFF</color>
+</resources>

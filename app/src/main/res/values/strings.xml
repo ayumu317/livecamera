@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">巡礼匹配助手</string>
+    <string name="title_scene_matcher">圣地巡礼实景匹配助手</string>
+    <string name="subtitle_scene_matcher">拍下眼前风景，去寻找它在动画世界中的对应瞬间</string>
+    <string name="preview_placeholder">上传旅途中的实景照片\nAI 将为你匹配动画原片与巡礼线索</string>
+    <string name="action_identify">开始识别</string>
+    <string name="action_back">返回</string>
+    <string name="action_open_diary">巡礼日记</string>
+    <string name="action_save_record">记录打卡</string>
+    <string name="action_next_option">换一个结果</string>
+    <string name="action_navigate_spot">地图导航</string>
+    <string name="diary_title">巡礼日记</string>
+    <string name="diary_subtitle">按时间倒序查看你已经收藏的巡礼记录</string>
+    <string name="diary_empty_title">还没有巡礼记录</string>
+    <string name="diary_empty_message">先完成一次识别并点击“记录打卡”，这里就会出现你的巡礼日记。</string>
+    <string name="diary_loading">正在读取本地巡礼日记…</string>
+    <string name="diary_load_failed">读取巡礼日记失败，请稍后重试</string>
+    <string name="diary_record_time_prefix">记录时间：</string>
+    <string name="diary_record_description_placeholder">这条巡礼记录还没有补充说明。</string>
+    <string name="diary_record_image">巡礼记录图片</string>
+    <string name="result_status">匹配成功</string>
+    <string name="result_confidence">置信度 92%</string>
+    <string name="result_anime_title">《作品标题占位》</string>
+    <string name="result_location_name">现实地点名称占位</string>
+    <string name="result_summary_placeholder">大模型的分析结果将显示在这里，例如镜头出现的集数、剧情上下文、巡礼站位建议，以及现场值得留意的画面细节。</string>
+    <string name="label_live_scene">现场实景</string>
+    <string name="label_reference_frame">动画原片参考</string>
+    <string name="label_ai_commentary">AI 巡礼解说</string>
+    <string name="label_domestic_address">景点地址</string>
+    <string name="label_domestic_intro">旅行科普介绍</string>
+    <string name="cd_preview_image">场景预览图</string>
+    <string name="cd_open_camera">打开相机</string>
+    <string name="cd_open_gallery">打开相册</string>
+    <string name="cd_reference_frame">动画原片分镜参考图</string>
+</resources>

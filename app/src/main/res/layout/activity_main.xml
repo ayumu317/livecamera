@@ -1,0 +1,724 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/page_background"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/tvPageIntro"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="24dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="2"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
+        android:text="@string/title_scene_matcher"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="二次元圣地巡礼实景匹配助手" />
+
+    <TextView
+        android:id="@+id/tvPageSubtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="36dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="36dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:lineSpacingExtra="2dp"
+        android:maxLines="2"
+        android:text="@string/subtitle_scene_matcher"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvPageIntro" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_diary"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginTop="12dp"
+        android:minHeight="40dp"
+        android:text="@string/action_open_diary"
+        android:textAllCaps="false"
+        android:textColor="@color/brand_primary"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:backgroundTint="@color/chip_brand_background"
+        app:cornerRadius="20dp"
+        app:icon="@android:drawable/ic_menu_recent_history"
+        app:iconPadding="6dp"
+        app:iconTint="@color/brand_primary"
+        app:rippleColor="@color/glass_button_ripple"
+        app:strokeColor="@color/card_stroke"
+        app:strokeWidth="1dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvPageSubtitle" />
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollContent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="14dp"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls"
+        android:paddingBottom="32dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_diary">
+
+        <LinearLayout
+            android:id="@+id/layoutContentVertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="32dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardPreview"
+                android:layout_width="match_parent"
+                android:layout_height="336dp"
+                android:layout_marginTop="6dp"
+                android:minHeight="280dp"
+                app:cardBackgroundColor="@color/surface_primary"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="1dp"
+                app:strokeColor="@color/card_stroke"
+                app:strokeWidth="1dp">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/layoutPreviewContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/iv_preview"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:background="@color/image_placeholder"
+                        android:contentDescription="@string/cd_preview_image"
+                        android:scaleType="centerCrop"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.LargeComponent"
+                        tools:src="@android:drawable/screen_background_light_transparent" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:background="@color/preview_scrim"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipPreviewTag"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/label_live_scene"
+                        android:textColor="@color/brand_primary"
+                        android:textStyle="bold"
+                        app:chipBackgroundColor="@color/chip_brand_background_emphasis"
+                        app:chipCornerRadius="14dp"
+                        app:chipMinHeight="30dp"
+                        app:ensureMinTouchTargetSize="false"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/tvPreviewPlaceholderHint"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="24dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginEnd="24dp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="4dp"
+                        android:maxLines="3"
+                        android:text="@string/preview_placeholder"
+                        android:textAlignment="center"
+                        android:textColor="@color/text_on_media"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toTopOf="@id/layoutActionButtons"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/chipPreviewTag"
+                        app:layout_constraintVertical_bias="0.38"
+                        tools:text="上传旅途中的实景照片&#10;AI 将为你匹配动画原片与巡礼线索" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutActionButtons"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="20dp"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_camera"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="10dp"
+                            android:contentDescription="@string/cd_open_camera"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:text=""
+                            app:backgroundTint="@color/glass_button_background"
+                            app:cornerRadius="18dp"
+                            app:icon="@android:drawable/ic_menu_camera"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconSize="24dp"
+                            app:iconTint="@color/brand_primary"
+                            app:rippleColor="@color/glass_button_ripple"
+                            app:strokeColor="@color/glass_button_stroke"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_gallery"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="10dp"
+                            android:contentDescription="@string/cd_open_gallery"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:text=""
+                            app:backgroundTint="@color/glass_button_background"
+                            app:cornerRadius="18dp"
+                            app:icon="@android:drawable/ic_menu_gallery"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconSize="24dp"
+                            app:iconTint="@color/brand_primary"
+                            app:rippleColor="@color/glass_button_ripple"
+                            app:strokeColor="@color/glass_button_stroke"
+                            app:strokeWidth="1dp" />
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/v_scanline"
+                        android:layout_width="0dp"
+                        android:layout_height="3dp"
+                        android:alpha="0.95"
+                        android:background="@color/scanline_color"
+                        android:elevation="6dp"
+                        android:visibility="gone"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_identify"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="18dp"
+                android:minHeight="58dp"
+                android:text="@string/action_identify"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                app:backgroundTint="@color/brand_primary"
+                app:cornerRadius="29dp"
+                app:elevation="2dp"
+                app:icon="@android:drawable/ic_menu_search"
+                app:iconPadding="8dp"
+                app:iconTint="@android:color/white"
+                app:rippleColor="@color/cta_ripple" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="@color/surface_primary"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="1dp"
+                app:strokeColor="@color/card_stroke"
+                app:strokeWidth="1dp"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:id="@+id/layoutResultContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:id="@+id/layoutResultMeta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipResultState"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:maxWidth="180dp"
+                            android:singleLine="true"
+                            android:text="@string/result_status"
+                            android:textColor="@color/accent_match"
+                            android:textStyle="bold"
+                            app:chipBackgroundColor="@color/chip_match_background"
+                            app:chipCornerRadius="14dp"
+                            app:chipMinHeight="30dp"
+                            app:ensureMinTouchTargetSize="false" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipConfidence"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:maxWidth="180dp"
+                            android:singleLine="true"
+                            android:text="@string/result_confidence"
+                            android:textColor="@color/brand_primary"
+                            android:textStyle="bold"
+                            app:chipBackgroundColor="@color/chip_brand_background"
+                            app:chipCornerRadius="14dp"
+                            app:chipMinHeight="30dp"
+                            app:ensureMinTouchTargetSize="false" />
+
+                        <androidx.constraintlayout.helper.widget.Flow
+                            android:id="@+id/flowResultMeta"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            app:constraint_referenced_ids="chipResultState,chipConfidence"
+                            app:flow_horizontalGap="8dp"
+                            app:flow_verticalGap="8dp"
+                            app:flow_wrapMode="chain"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    <TextView
+                        android:id="@+id/tvAnimeTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:breakStrategy="balanced"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="2"
+                        android:text="@string/result_anime_title"
+                        android:textColor="@color/text_primary"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        tools:text="《作品标题占位：当动画标题很长时，也需要稳稳收束在两行内》" />
+
+                    <TextView
+                        android:id="@+id/tvLocationName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:breakStrategy="balanced"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="2"
+                        android:text="@string/result_location_name"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        tools:text="现实地点名称占位：如果地点名和副标题很长，也要避免把下面的图片挤坏" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutOverseasContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:background="@drawable/bg_overseas_film"
+                        android:elevation="4dp"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingTop="14dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="16dp">
+
+                        <LinearLayout
+                            android:layout_width="12dp"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_marginEnd="10dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvOverseasBadge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_overseas_badge"
+                                android:gravity="center"
+                                android:includeFontPadding="false"
+                                android:paddingStart="12dp"
+                                android:paddingTop="6dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="6dp"
+                                android:text="🎬 圣地巡礼"
+                                android:textColor="@android:color/white"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                tools:ignore="HardcodedText" />
+
+                            <TextView
+                                android:id="@+id/tvReferenceLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:includeFontPadding="false"
+                                android:text="@string/label_reference_frame"
+                                android:textColor="#CDEEFF"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <com.google.android.material.card.MaterialCardView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                app:cardBackgroundColor="#F7FAFF"
+                                app:cardCornerRadius="18dp"
+                                app:cardElevation="0dp"
+                                app:strokeColor="#F7FAFF"
+                                app:strokeWidth="1dp">
+
+                                <FrameLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:padding="6dp">
+
+                                    <com.google.android.material.imageview.ShapeableImageView
+                                        android:id="@+id/iv_result_reference"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="196dp"
+                                        android:background="@color/image_placeholder"
+                                        android:contentDescription="@string/cd_reference_frame"
+                                        android:scaleType="centerCrop"
+                                        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+                                        tools:src="@android:drawable/screen_background_light_transparent" />
+                                </FrameLayout>
+                            </com.google.android.material.card.MaterialCardView>
+
+                            <TextView
+                                android:id="@+id/tvCommentaryLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="18dp"
+                                android:includeFontPadding="false"
+                                android:text="@string/label_ai_commentary"
+                                android:textColor="#FFBE82"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tv_result"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                android:breakStrategy="high_quality"
+                                android:hyphenationFrequency="normal"
+                                android:lineSpacingExtra="6dp"
+                                android:text="@string/result_summary_placeholder"
+                                android:textColor="#E7EBF3"
+                                android:textSize="15sp"
+                                tools:text="AI 解说占位：这里可能出现较长的巡礼导览内容，例如该镜头对应的集数、剧情上下文、取景角度、建议打卡站位与时间段。文本需要自然换行，并且依赖外层 NestedScrollView 承载长内容，而不是把卡片内部撑坏。" />
+
+                            <TextView
+                                android:id="@+id/tv_desc"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:breakStrategy="high_quality"
+                                android:lineSpacingExtra="5dp"
+                                android:textColor="#A7AFBF"
+                                android:textSize="13sp"
+                                android:visibility="gone"
+                                tools:text="补充信息：例如截图时间点、Anitabi 收录地标数、路线提示等。" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="12dp"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+
+                            <View
+                                android:layout_width="8dp"
+                                android:layout_height="12dp"
+                                android:layout_marginVertical="5dp"
+                                android:background="@drawable/bg_overseas_perforation" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutDomesticContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:background="@drawable/bg_domestic_postcard"
+                        android:elevation="3dp"
+                        android:orientation="vertical"
+                        android:paddingStart="18dp"
+                        android:paddingTop="18dp"
+                        android:paddingEnd="18dp"
+                        android:paddingBottom="18dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvDomesticBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_domestic_badge"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:paddingStart="12dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="12dp"
+                            android:paddingBottom="6dp"
+                            android:text="📍 国内漫游"
+                            android:textColor="#4F8A66"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticAddressLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:includeFontPadding="false"
+                            android:text="@string/label_domestic_address"
+                            android:textColor="@color/text_primary"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticAddress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:breakStrategy="high_quality"
+                            android:drawableStart="@android:drawable/ic_dialog_map"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical"
+                            android:lineSpacingExtra="4dp"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="14sp"
+                            tools:text="北京市东城区景山前街4号" />
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginTop="16dp"
+                            android:background="#EFE5D8" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticIntroLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:includeFontPadding="false"
+                            android:text="@string/label_domestic_intro"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticIntro"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:breakStrategy="high_quality"
+                            android:hyphenationFrequency="normal"
+                            android:lineSpacingExtra="6dp"
+                            android:textColor="@color/text_body"
+                            android:textSize="15sp"
+                            tools:text="故宫位于北京中轴线上，是明清两代皇宫，也是中国现存规模最大、保存最完整的木结构宫殿建筑群。推荐避开正午高峰，从午门进入后沿太和殿到乾清宫方向游览。" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutResultActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:baselineAligned="false"
+                        android:gravity="center"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSaveRecord"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1"
+                            android:minHeight="48dp"
+                            android:text="@string/action_save_record"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            app:backgroundTint="@color/brand_primary"
+                            app:cornerRadius="18dp"
+                            app:rippleColor="@color/cta_ripple" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnNextOption"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:minHeight="48dp"
+                            android:text="@string/action_next_option"
+                            android:textAllCaps="false"
+                            android:textColor="@color/brand_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            app:backgroundTint="@color/chip_brand_background"
+                            app:cornerRadius="18dp"
+                            app:rippleColor="@color/glass_button_ripple"
+                            app:strokeColor="@color/card_stroke"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnNavigateSpot"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:minHeight="48dp"
+                            android:text="@string/action_navigate_spot"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            android:background="@drawable/bg_domestic_nav_button"
+                            app:backgroundTint="@null"
+                            app:cornerRadius="18dp"
+                            app:icon="@android:drawable/ic_dialog_map"
+                            app:iconPadding="6dp"
+                            app:iconTint="@android:color/white"
+                            app:rippleColor="@color/cta_ripple" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

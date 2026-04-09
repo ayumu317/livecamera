@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="14dp"
+    app:cardBackgroundColor="@color/surface_primary"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/card_stroke"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/ivRecordPhoto"
+            android:layout_width="match_parent"
+            android:layout_height="188dp"
+            android:background="@color/image_placeholder"
+            android:contentDescription="@string/diary_record_image"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+            tools:src="@android:drawable/screen_background_light_transparent" />
+
+        <TextView
+            android:id="@+id/tvRecordAnimeTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="@color/text_primary"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            tools:text="《作品标题占位》" />
+
+        <TextView
+            android:id="@+id/tvRecordLocation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="现实地点名称占位" />
+
+        <TextView
+            android:id="@+id/tvRecordTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/brand_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            tools:text="记录时间：2026-03-20 21:30" />
+
+        <TextView
+            android:id="@+id/tvRecordDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:lineSpacingExtra="5dp"
+            android:maxLines="6"
+            android:textColor="@color/text_body"
+            android:textSize="14sp"
+            tools:text="这里显示本次巡礼结果的摘要说明，包括剧情场景、取景点信息与补充备注。" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
