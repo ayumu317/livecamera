@@ -1,0 +1,32 @@
+<svg width="1400" height="760" viewBox="0 0 1400 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="760" rx="28" fill="#F8FAFD"/>
+  <text x="70" y="90" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#202534">LiveCamera-LBS Architecture</text>
+  <rect x="80" y="150" width="260" height="120" rx="24" fill="#EBF1FF" stroke="#D9E3F2"/>
+  <text x="210" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#202534">Android Client</text>
+  <text x="210" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#667085">Camera / Gallery / UI</text>
+  <rect x="430" y="150" width="260" height="120" rx="24" fill="#E8F7F3" stroke="#CBEADD"/>
+  <text x="560" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#202534">Doubao Vision</text>
+  <text x="560" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#667085">Structured Recognition</text>
+  <rect x="780" y="150" width="260" height="120" rx="24" fill="#FFF5E8" stroke="#F0D9B9"/>
+  <text x="910" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#202534">Spring Boot Gateway</text>
+  <text x="910" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#667085">Domestic / Overseas Routing</text>
+  <rect x="1130" y="150" width="190" height="120" rx="24" fill="#F0F4FA" stroke="#D9E3F2"/>
+  <text x="1225" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#202534">ngrok</text>
+  <text x="1225" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#667085">Remote Debug</text>
+  <path d="M340 210H430" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M690 210H780" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M1040 210H1130" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+  <rect x="280" y="380" width="340" height="220" rx="28" fill="#FFFDF8" stroke="#E8DDCC"/>
+  <text x="450" y="438" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#202534">Domestic Postcard Flow</text>
+  <text x="312" y="490" font-family="Arial, sans-serif" font-size="20" fill="#4A5567">• Tencent device location</text>
+  <text x="312" y="528" font-family="Arial, sans-serif" font-size="20" fill="#4A5567">• Domestic gateway coordinates</text>
+  <text x="312" y="566" font-family="Arial, sans-serif" font-size="20" fill="#4A5567">• Travel intro + navigation</text>
+  <rect x="760" y="380" width="360" height="220" rx="28" fill="#171C24" stroke="#313744"/>
+  <text x="940" y="438" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#F8FAFC">Overseas Film Flow</text>
+  <text x="792" y="490" font-family="Arial, sans-serif" font-size="20" fill="#E7EBF3">• Anitabi / Bangumi / SerpApi</text>
+  <text x="792" y="528" font-family="Arial, sans-serif" font-size="20" fill="#E7EBF3">• Reference frame matching</text>
+  <text x="792" y="566" font-family="Arial, sans-serif" font-size="20" fill="#E7EBF3">• Pilgrimage diary and map access</text>
+  <path d="M910 270V330" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M910 330H450V380" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M910 330V380" stroke="#5E78F6" stroke-width="6" stroke-linecap="round"/>
+</svg>
