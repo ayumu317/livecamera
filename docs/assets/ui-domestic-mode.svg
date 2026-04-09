@@ -1,0 +1,19 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" rx="28" fill="#F5F8FF"/>
+  <rect x="160" y="60" width="420" height="600" rx="32" fill="#FCFEFF" stroke="#D9E3F2"/>
+  <rect x="196" y="108" width="348" height="220" rx="24" fill="#DDE8F3"/>
+  <rect x="196" y="364" width="348" height="232" rx="24" fill="#FFFDF8" stroke="#E8DDCC"/>
+  <rect x="224" y="392" width="116" height="34" rx="17" fill="#EAF6EE"/>
+  <text x="282" y="414" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#4F8A66">📍 国内漫游</text>
+  <text x="224" y="464" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#202534">景点地址</text>
+  <text x="224" y="506" font-family="Arial, sans-serif" font-size="18" fill="#667085">北京市东城区景山前街4号</text>
+  <line x1="224" y1="534" x2="516" y2="534" stroke="#EFE5D8"/>
+  <text x="224" y="574" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#202534">旅行科普介绍</text>
+  <text x="224" y="612" font-family="Arial, sans-serif" font-size="18" fill="#4A5567">Doubao 生成的景点故事、看点和建议路线。</text>
+  <text x="640" y="186" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#202534">Domestic Mode</text>
+  <text x="640" y="234" font-family="Arial, sans-serif" font-size="26" fill="#667085">Warm postcard styling for landmark travel.</text>
+  <text x="640" y="302" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Soft card container</text>
+  <text x="640" y="338" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Scenic address and travel intro</text>
+  <text x="640" y="374" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Navigation-first action</text>
+  <text x="640" y="410" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Clean editorial reading rhythm</text>
+</svg>
