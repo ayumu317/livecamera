@@ -1,0 +1,29 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" rx="28" fill="#F5F8FF"/>
+  <rect x="120" y="82" width="500" height="556" rx="28" fill="#171C24" stroke="#313744"/>
+  <rect x="150" y="116" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="150" y="178" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="150" y="240" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="150" y="302" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="150" y="364" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="150" y="426" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="116" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="178" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="240" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="302" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="364" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="578" y="426" width="12" height="40" rx="4" fill="#F3F6FB"/>
+  <rect x="192" y="122" width="132" height="36" rx="18" fill="#00A1D6"/>
+  <text x="258" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="white">🎬 圣地巡礼</text>
+  <rect x="192" y="192" width="356" height="208" rx="20" fill="#F7FAFF"/>
+  <rect x="204" y="204" width="332" height="184" rx="16" fill="#DCE5F4"/>
+  <text x="192" y="448" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#FFBE82">AI 巡礼解说</text>
+  <text x="192" y="490" font-family="Arial, sans-serif" font-size="20" fill="#E7EBF3">Anime title + reference frame + pilgrimage notes</text>
+  <text x="192" y="528" font-family="Arial, sans-serif" font-size="18" fill="#A7AFBF">subtitle-like rhythm and stronger cinematic contrast</text>
+  <text x="678" y="206" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#202534">Overseas Mode</text>
+  <text x="678" y="254" font-family="Arial, sans-serif" font-size="26" fill="#667085">Film-strip styling for anime pilgrimage.</text>
+  <text x="678" y="322" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Dark container with perforation accents</text>
+  <text x="678" y="358" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Photo-frame screenshot presentation</text>
+  <text x="678" y="394" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Bright title chips and cinematic typography</text>
+  <text x="678" y="430" font-family="Arial, sans-serif" font-size="22" fill="#4A5567">• Fandom-focused comparison experience</text>
+</svg>
