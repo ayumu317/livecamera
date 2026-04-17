@@ -3,4 +3,7 @@
     <cache-path
         name="camera_images"
         path="images/" />
+    <external-files-path
+        name="private_camera_images"
+        path="Pictures/livecamera_captures/" />
 </paths>

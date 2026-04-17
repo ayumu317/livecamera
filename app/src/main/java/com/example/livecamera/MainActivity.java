@@ -12,6 +12,7 @@ import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
@@ -70,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String STATE_PENDING_CAMERA_URI = "state_pending_camera_uri";
     private static final int MAX_IMAGE_EDGE = 1024;
     private static final int JPEG_QUALITY = 80;
+    private static final String PRIVATE_CAPTURE_DIR_NAME = "livecamera_captures";
+    private static final String CACHE_CAPTURE_DIR_NAME = "images";
     private static final String DEFAULT_RESULT_HINT = "请选择一张实景照片，然后点击“开始识别”。";
     private static final String DEFAULT_DESC_HINT = "等待识别结果";
 
@@ -314,7 +317,7 @@ public class MainActivity extends AppCompatActivity {
         String pendingUri = savedInstanceState.getString(STATE_PENDING_CAMERA_URI);
         if (pendingUri != null && !pendingUri.isEmpty()) {
             pendingCameraImageUri = Uri.parse(pendingUri);
-            pendingCameraFile = new File(getCacheDir(), "images/" + extractFileNameFromUri(pendingCameraImageUri));
+            pendingCameraFile = resolveCapturedImageFile(extractFileNameFromUri(pendingCameraImageUri));
         }
     }
 
@@ -424,16 +427,72 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Uri createTempPhotoUri() throws IOException {
-        File imageDir = new File(getCacheDir(), "images");
-        if (!imageDir.exists() && !imageDir.mkdirs()) {
-            throw new IOException("创建缓存目录失败");
-        }
+        File imageDir = getPrivateCaptureDirectory();
         pendingCameraFile = File.createTempFile("camera_", ".jpg", imageDir);
         return FileProvider.getUriForFile(
                 this,
                 getPackageName() + ".fileprovider",
                 pendingCameraFile
         );
+    }
+
+    private File getPrivateCaptureDirectory() throws IOException {
+        File externalPicturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if (externalPicturesDir != null) {
+            File privateImageDir = new File(externalPicturesDir, PRIVATE_CAPTURE_DIR_NAME);
+            if (ensureDirectoryReady(privateImageDir)) {
+                ensureNoMediaFile(privateImageDir);
+                return privateImageDir;
+            }
+            Log.w(TAG, "Unable to prepare app-specific external image directory, falling back to cache");
+        }
+
+        File cacheImageDir = new File(getCacheDir(), CACHE_CAPTURE_DIR_NAME);
+        if (ensureDirectoryReady(cacheImageDir)) {
+            ensureNoMediaFile(cacheImageDir);
+            return cacheImageDir;
+        }
+        throw new IOException("Unable to create private image directory");
+    }
+
+    @Nullable
+    private File resolveCapturedImageFile(String fileName) {
+        if (isBlank(fileName)) {
+            return null;
+        }
+        File externalPicturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if (externalPicturesDir != null) {
+            File privateImageFile = new File(new File(externalPicturesDir, PRIVATE_CAPTURE_DIR_NAME), fileName);
+            if (privateImageFile.exists()) {
+                return privateImageFile;
+            }
+        }
+        File cacheImageFile = new File(new File(getCacheDir(), CACHE_CAPTURE_DIR_NAME), fileName);
+        if (cacheImageFile.exists()) {
+            return cacheImageFile;
+        }
+        return cacheImageFile;
+    }
+
+    private boolean ensureDirectoryReady(File directory) {
+        return directory.exists() ? directory.isDirectory() : directory.mkdirs();
+    }
+
+    private void ensureNoMediaFile(File directory) {
+        if (directory == null || !directory.isDirectory()) {
+            return;
+        }
+        File noMediaFile = new File(directory, ".nomedia");
+        if (noMediaFile.exists()) {
+            return;
+        }
+        try {
+            if (!noMediaFile.createNewFile()) {
+                Log.w(TAG, "Unable to create .nomedia in " + directory.getAbsolutePath());
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to create .nomedia in " + directory.getAbsolutePath(), e);
+        }
     }
 
     private void deletePendingCameraFile() {
