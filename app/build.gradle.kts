@@ -36,9 +36,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "ARK_API_KEY", "\"${buildConfigString("ARK_API_KEY")}\"")
+        buildConfigField("String", "DOUBAO_MODEL_ID", "\"${buildConfigString("DOUBAO_MODEL_ID")}\"")
+        buildConfigField("String", "DOUBAO_RESPONSES_URL", "\"${buildConfigString("DOUBAO_RESPONSES_URL")}\"")
         buildConfigField("String", "DOUBAO_BASE_URL", "\"${buildConfigString("DOUBAO_BASE_URL")}\"")
         buildConfigField("String", "DOUBAO_API_KEY", "\"${buildConfigString("DOUBAO_API_KEY")}\"")
         buildConfigField("String", "DOUBAO_MODEL", "\"${buildConfigString("DOUBAO_MODEL")}\"")
+        buildConfigField("String", "NGROK_BASE_URL", "\"${buildConfigString("NGROK_BASE_URL")}\"")
         buildConfigField("String", "SERPAPI_KEY", "\"${buildConfigString("SERPAPI_KEY")}\"")
         buildConfigField("String", "TENCENT_MAP_SDK_KEY", "\"${buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")}\"")
         manifestPlaceholders["TencentMapSDK_KEY"] = buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")
@@ -79,4 +83,15 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+}
+
+val startNgrok by tasks.registering(Exec::class) {
+    group = "application"
+    description = "Ensure an HTTPS ngrok tunnel is available before building the Android app."
+    workingDir = rootProject.projectDir
+    commandLine("node", rootProject.file("scripts/start-ngrok.js").absolutePath)
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(startNgrok)
 }

@@ -18,8 +18,7 @@ import okhttp3.ResponseBody;
 
 public class LocationSearchClient {
 
-    // Emulator uses 10.0.2.2. For real devices, replace with your LAN IP like http://192.168.1.10:8080
-    public static final String BASE_URL = "https://deft-nonseditious-lashawnda.ngrok-free.dev";
+    public static final String BASE_URL = BuildConfig.NGROK_BASE_URL;
 
     private static final String SEARCH_PATH = "api/location/search";
 
@@ -90,6 +89,11 @@ public class LocationSearchClient {
         }
         if (isBlank(keyword)) {
             callback.onFailure(new IllegalArgumentException("地点关键词为空，无法调用定位网关"));
+            return;
+        }
+
+        if (isBlank(BASE_URL)) {
+            callback.onFailure(new IllegalStateException("NGROK_BASE_URL is missing. Run node scripts/start-ngrok.js before building the app."));
             return;
         }
 
