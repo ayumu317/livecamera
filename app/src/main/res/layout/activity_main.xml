@@ -431,81 +431,6 @@
                         tools:text="现实地点名称占位：如果地点名和副标题很长，也要避免把下面的图片挤坏" />
 
                     <LinearLayout
-                        android:id="@+id/layoutAnimeRematch"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:orientation="vertical"
-                        android:visibility="gone">
-
-                        <TextView
-                            android:id="@+id/tvManualAnimeHint"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:includeFontPadding="false"
-                            android:text="AI 识别的作品不对？输入正确作品名后重新匹配图片"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="13sp"
-                            android:textStyle="bold"
-                            tools:ignore="HardcodedText" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:baselineAligned="false"
-                            android:orientation="horizontal">
-
-                            <EditText
-                                android:id="@+id/etManualAnimeName"
-                                android:layout_width="0dp"
-                                android:layout_height="48dp"
-                                android:layout_marginEnd="8dp"
-                                android:layout_weight="1"
-                                android:backgroundTint="@color/card_stroke"
-                                android:hint="输入作品名"
-                                android:imeOptions="actionSearch"
-                                android:inputType="text"
-                                android:maxLines="1"
-                                android:paddingStart="12dp"
-                                android:paddingEnd="12dp"
-                                android:textColor="@color/text_primary"
-                                android:textColorHint="@color/text_secondary"
-                                android:textSize="14sp"
-                                tools:ignore="HardcodedText" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnSearchManualAnime"
-                                android:layout_width="wrap_content"
-                                android:layout_height="48dp"
-                                android:minHeight="48dp"
-                                android:text="按该作品重新匹配"
-                                android:textAllCaps="false"
-                                android:textColor="@android:color/white"
-                                android:textSize="13sp"
-                                android:textStyle="bold"
-                                app:backgroundTint="@color/brand_primary"
-                                app:cornerRadius="18dp"
-                                app:rippleColor="@color/cta_ripple"
-                                tools:ignore="HardcodedText" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:id="@+id/layoutAnimeCandidateList"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:orientation="vertical" />
-
-                        <LinearLayout
-                            android:id="@+id/layoutSpotCandidateList"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:orientation="vertical" />
-                    </LinearLayout>
-
-                    <LinearLayout
                         android:id="@+id/layoutOverseasContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -856,6 +781,93 @@
                             app:iconPadding="6dp"
                             app:iconTint="@android:color/white"
                             app:rippleColor="@color/cta_ripple" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutAnimeCandidateList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="vertical" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutSpotCandidateList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="vertical" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutAnimeRematch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvManualAnimeHint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:text="作品识别不对？"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvManualAnimeDescription"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="3dp"
+                            android:text="输入正确作品名，AI 会结合当前图片重新匹配巡礼地点。"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            tools:ignore="HardcodedText" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:baselineAligned="false"
+                            android:orientation="horizontal">
+
+                            <EditText
+                                android:id="@+id/etManualAnimeName"
+                                android:layout_width="0dp"
+                                android:layout_height="48dp"
+                                android:layout_marginEnd="8dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/card_stroke"
+                                android:hint="输入作品名"
+                                android:imeOptions="actionSearch"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:paddingStart="12dp"
+                                android:paddingEnd="12dp"
+                                android:textColor="@color/text_primary"
+                                android:textColorHint="@color/text_secondary"
+                                android:textSize="14sp"
+                                tools:ignore="HardcodedText" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnSearchManualAnime"
+                                android:layout_width="wrap_content"
+                                android:layout_height="48dp"
+                                android:minHeight="48dp"
+                                android:text="按该作品重新匹配"
+                                android:textAllCaps="false"
+                                android:textColor="@android:color/white"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                app:backgroundTint="@color/brand_primary"
+                                app:cornerRadius="18dp"
+                                app:rippleColor="@color/cta_ripple"
+                                tools:ignore="HardcodedText" />
+                        </LinearLayout>
                     </LinearLayout>
 
                 </LinearLayout>

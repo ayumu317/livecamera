@@ -135,6 +135,12 @@ public class MainActivity extends AppCompatActivity {
     private String currentDesc;
     private String currentLocalUri;
     private String currentReferenceUrl;
+    private String confirmedAnimeName;
+    private String confirmedSpotName;
+    private String confirmedLocationName;
+    private String confirmedDescription;
+    private String confirmedReferenceUrl;
+    private String confirmedLocalImageUri;
     private boolean hasSavedCurrentRecord;
     private List<String> currentCandidateNames;
     private int currentCandidateIndex = 0;
@@ -440,7 +446,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setIdentifyMode(IdentifyMode identifyMode) {
-        currentIdentifyMode = identifyMode != null ? identifyMode : IdentifyMode.ANIME;
+        IdentifyMode nextIdentifyMode = identifyMode != null ? identifyMode : IdentifyMode.ANIME;
+        if (currentIdentifyMode != nextIdentifyMode) {
+            clearConfirmedPilgrimageSelection();
+        }
+        currentIdentifyMode = nextIdentifyMode;
         updateIdentifyModeButtons();
         switchResultMode(currentResultMode);
         Log.d(DEBUG_TAG, "currentIdentifyMode=" + currentIdentifyMode);
@@ -719,6 +729,7 @@ public class MainActivity extends AppCompatActivity {
         clearResultDisplay();
         updateLoadingState(false);
         updatePreviewUi(false);
+        clearCurrentResultSnapshot();
         clearCurrentCandidateState();
         btnStartMatch.setEnabled(true);
         tvResultSummary.setText(DEFAULT_RESULT_HINT);
@@ -1608,6 +1619,9 @@ public class MainActivity extends AppCompatActivity {
                     bangumiLiteResponse.getCity(),
                     "巡礼地点待进一步确认"
             );
+            if (currentIdentifyMode == IdentifyMode.ANIME) {
+                animeDisplayName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), animeDisplayName);
+            }
             String descriptionText = buildResultText(parsedResult, bangumiLiteResponse, firstPoint, hasMultiplePoints);
             String locationDisplayText = locationDisplayName + " \uD83D\uDCCD(点击导航)";
             String pointImageUrl = AnitabiApiClient.getHighResImageUrl(firstPoint.getImage());
@@ -1661,28 +1675,40 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
-            chipResultState.setText("地点候选");
-            chipConfidence.setText("请选择地点");
-            tvAnimeTitle.setText(chooseFirstNonBlank(
+            chipResultState.setText("圣地巡礼");
+            chipConfidence.setText("AI 已匹配");
+            String animeDisplayName = chooseFirstNonBlank(
+                    currentIdentifyMode == IdentifyMode.ANIME ? getUserSelectedAnimeName(parsedResult) : null,
                     bangumiLiteResponse.getCn(),
                     bangumiLiteResponse.getTitle(),
                     parsedResult.animeTitle,
                     "AI 识别结果"
-            ));
-            tvLocationName.setVisibility(View.VISIBLE);
-            tvLocationName.setText(chooseFirstNonBlank(parsedResult.locationName, "地点线索待确认"));
-            tvResultSummary.setText(chooseFirstNonBlank(
+            );
+            String locationDisplayName = chooseFirstNonBlank(parsedResult.locationName, "地点线索待确认");
+            String descriptionText = chooseFirstNonBlank(
                     parsedResult.summary,
-                    "AI 已结合指定作品和当前图片重新提取地点线索，请从下方候选巡礼地点中确认。"
-            ));
+                    "AI 已结合指定作品和当前图片重新提取地点线索，请从下方其他可能的巡礼地点中确认。"
+            );
+            tvAnimeTitle.setText(animeDisplayName);
+            tvLocationName.setVisibility(View.VISIBLE);
+            tvLocationName.setText(locationDisplayName);
+            tvResultSummary.setText(descriptionText);
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
-                tvDesc.setText(buildRematchKeywordSummary(parsedResult));
+                tvDesc.setText(joinLines("基于当前图片与作品线索生成", buildRematchKeywordSummary(parsedResult)));
             }
             tvReferenceLabel.setVisibility(View.GONE);
             if (ivResultReference != null) {
                 ivResultReference.setVisibility(View.GONE);
             }
+            updateCurrentResultSnapshot(animeDisplayName, locationDisplayName, descriptionText, null);
+            setConfirmedPilgrimageSelection(
+                    animeDisplayName,
+                    locationDisplayName,
+                    locationDisplayName,
+                    descriptionText,
+                    null
+            );
             renderSpotCandidateList(parsedResult, bangumiLiteResponse, sortedCandidates, pointDetails.size());
             updateNextOptionButtonState();
             updateNavigateButtonState();
@@ -1720,8 +1746,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         layoutSpotCandidateList.removeAllViews();
-        TextView titleView = createCandidateText("候选巡礼地点", 15, true);
+        TextView titleView = createCandidateText("其他可能的巡礼地点", 15, true);
         layoutSpotCandidateList.addView(titleView);
+        TextView hintView = createCandidateText("如果当前结果不准确，可以从下面选择更匹配的地点。", 13, false);
+        layoutSpotCandidateList.addView(hintView);
         if (spotCandidates == null || spotCandidates.isEmpty()) {
             TextView emptyView = createCandidateText("该作品暂未找到巡礼地点，可尝试更换作品名或补充更具体地点。", 14, false);
             layoutSpotCandidateList.addView(emptyView);
@@ -1752,6 +1780,15 @@ public class MainActivity extends AppCompatActivity {
             MaterialButton actionButton = createCandidateActionButton("选择此地点");
             actionButton.setOnClickListener(view -> {
                 Log.d(DEBUG_TAG, "selected spot = " + chooseFirstNonBlank(point.getName(), point.getId()));
+                String selectedAnimeName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), parsedResult.animeTitle);
+                String selectedSpotName = chooseFirstNonBlank(point.getName(), point.getId());
+                setConfirmedPilgrimageSelection(
+                        selectedAnimeName,
+                        selectedSpotName,
+                        selectedSpotName,
+                        chooseFirstNonBlank(parsedResult.summary, candidate.reason),
+                        AnitabiApiClient.getHighResImageUrl(point.getImage())
+                );
                 renderSelectedSpotResult(parsedResult, bangumiLiteResponse, point, totalPointCount > 1);
             });
             content.addView(actionButton);
@@ -1770,7 +1807,6 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             clearAnimeCandidateViews();
-            clearSpotCandidateViews();
             cardResult.setVisibility(View.VISIBLE);
 
             String animeDisplayName = chooseFirstNonBlank(
@@ -1779,6 +1815,9 @@ public class MainActivity extends AppCompatActivity {
                     parsedResult.animeTitle,
                     "AI 识别结果"
             );
+            if (currentIdentifyMode == IdentifyMode.ANIME) {
+                animeDisplayName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), animeDisplayName);
+            }
             String locationDisplayName = chooseFirstNonBlank(
                     selectedPoint.getName(),
                     parsedResult.locationName,
@@ -1788,22 +1827,30 @@ public class MainActivity extends AppCompatActivity {
             String descriptionText = buildResultText(parsedResult, bangumiLiteResponse, selectedPoint, hasMultiplePoints);
             String pointImageUrl = AnitabiApiClient.getHighResImageUrl(selectedPoint.getImage());
 
-            chipResultState.setText("已选择地点");
-            chipConfidence.setText("用户确认");
+            chipResultState.setText("圣地巡礼");
+            chipConfidence.setText("已选择地点");
             tvAnimeTitle.setText(animeDisplayName);
             tvLocationName.setVisibility(View.VISIBLE);
             bindLocationMapEntry(locationDisplayName, locationDisplayName + " \uD83D\uDCCD(点击导航)");
             tvResultSummary.setText(descriptionText);
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
-                tvDesc.setText(buildNavigationHint(
-                        buildSupplementText(parsedResult, bangumiLiteResponse, selectedPoint, hasMultiplePoints)
+                tvDesc.setText(joinLines(
+                        "基于当前图片与作品线索生成",
+                        buildNavigationHint(buildSupplementText(parsedResult, bangumiLiteResponse, selectedPoint, hasMultiplePoints))
                 ));
             }
 
             currentCandidateLocation = locationDisplayName;
             currentCandidateDesc = descriptionText;
             updateCurrentResultSnapshot(animeDisplayName, locationDisplayName, descriptionText, pointImageUrl);
+            setConfirmedPilgrimageSelection(
+                    animeDisplayName,
+                    chooseFirstNonBlank(selectedPoint.getName(), selectedPoint.getId()),
+                    locationDisplayName,
+                    descriptionText,
+                    pointImageUrl
+            );
             updateNextOptionButtonState();
             updateNavigateButtonState();
 
@@ -1997,6 +2044,9 @@ public class MainActivity extends AppCompatActivity {
                     parsedResult.animeTitle,
                     "AI 识别结果"
             );
+            if (currentIdentifyMode == IdentifyMode.ANIME) {
+                animeDisplayName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), animeDisplayName);
+            }
             String locationDisplayName = chooseFirstNonBlank(
                     getPreferredLocationDisplayName(null),
                     firstLitePoint.getCn(),
@@ -2826,12 +2876,42 @@ public class MainActivity extends AppCompatActivity {
         updateSaveRecordButtonState();
     }
 
+    private void setConfirmedPilgrimageSelection(
+            String animeName,
+            String spotName,
+            String locationName,
+            String description,
+            String referenceImageUrl
+    ) {
+        confirmedAnimeName = animeName;
+        confirmedSpotName = spotName;
+        confirmedLocationName = locationName;
+        confirmedDescription = description;
+        confirmedReferenceUrl = referenceImageUrl;
+        confirmedLocalImageUri = selectedImageUri != null ? selectedImageUri.toString() : null;
+        hasSavedCurrentRecord = false;
+        Log.d(DEBUG_TAG, "confirmedAnimeName=" + confirmedAnimeName);
+        Log.d(DEBUG_TAG, "confirmedSpotName=" + confirmedSpotName);
+        updateSaveRecordButtonState();
+    }
+
+    private void clearConfirmedPilgrimageSelection() {
+        confirmedAnimeName = null;
+        confirmedSpotName = null;
+        confirmedLocationName = null;
+        confirmedDescription = null;
+        confirmedReferenceUrl = null;
+        confirmedLocalImageUri = null;
+        updateSaveRecordButtonState();
+    }
+
     private void clearCurrentResultSnapshot() {
         currentAnimeName = null;
         currentLocation = null;
         currentDesc = null;
         currentLocalUri = null;
         currentReferenceUrl = null;
+        clearConfirmedPilgrimageSelection();
         hasSavedCurrentRecord = false;
         updateSaveRecordButtonState();
     }
@@ -2844,6 +2924,7 @@ public class MainActivity extends AppCompatActivity {
         currentVisualKeywords = null;
         currentSpotSearchKeywords = null;
         currentTriedSubjectIds = null;
+        clearConfirmedPilgrimageSelection();
         clearAnimeCandidateViews();
         clearSpotCandidateViews();
         updateNextOptionButtonState();
@@ -2877,14 +2958,29 @@ public class MainActivity extends AppCompatActivity {
         if (btnSaveRecord == null) {
             return;
         }
-        boolean hasRecordData = !isBlank(currentAnimeName) || !isBlank(currentLocation);
+        boolean hasRecordData = !isBlank(confirmedAnimeName)
+                || !isBlank(confirmedLocationName)
+                || !isBlank(confirmedSpotName)
+                || !isBlank(currentAnimeName)
+                || !isBlank(currentLocation);
         btnSaveRecord.setVisibility(hasRecordData ? View.VISIBLE : View.GONE);
         btnSaveRecord.setEnabled(hasRecordData && !hasSavedCurrentRecord);
         btnSaveRecord.setText(hasSavedCurrentRecord ? "已记录打卡" : "📌 记录打卡");
     }
 
     private void saveCurrentRecord() {
-        if (isBlank(currentAnimeName) && isBlank(currentLocation)) {
+        String animeNameToSave = chooseFirstNonBlank(confirmedAnimeName, currentAnimeName);
+        String locationToSave = chooseFirstNonBlank(confirmedLocationName, confirmedSpotName, currentLocation);
+        String descToSave = chooseFirstNonBlank(confirmedDescription, currentDesc);
+        String localImageUriToSave = chooseFirstNonBlank(confirmedLocalImageUri, currentLocalUri);
+        String referenceImageUrlToSave = chooseFirstNonBlank(confirmedReferenceUrl, currentReferenceUrl);
+
+        Log.d(DEBUG_TAG, "confirmedAnimeName=" + confirmedAnimeName);
+        Log.d(DEBUG_TAG, "confirmedSpotName=" + confirmedSpotName);
+        Log.d(DEBUG_TAG, "save animeName=" + animeNameToSave);
+        Log.d(DEBUG_TAG, "save location=" + locationToSave);
+
+        if (isBlank(animeNameToSave) && isBlank(locationToSave)) {
             showToast("当前没有可记录的巡礼结果");
             return;
         }
@@ -2894,11 +2990,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         PilgrimRecord record = new PilgrimRecord();
-        record.animeName = currentAnimeName;
-        record.locationName = currentLocation;
-        record.description = currentDesc;
-        record.localImageUri = currentLocalUri;
-        record.referenceImageUrl = currentReferenceUrl;
+        record.animeName = animeNameToSave;
+        record.locationName = locationToSave;
+        record.description = descToSave;
+        record.localImageUri = localImageUriToSave;
+        record.referenceImageUrl = referenceImageUrlToSave;
         record.timestamp = System.currentTimeMillis();
 
         backgroundExecutor.execute(() -> {
@@ -3115,8 +3211,19 @@ public class MainActivity extends AppCompatActivity {
         return fallbackName;
     }
 
+    private String getUserSelectedAnimeName(@Nullable ParsedResult parsedResult) {
+        if (parsedResult != null) {
+            String firstCandidate = parsedResult.animeNames != null && !parsedResult.animeNames.isEmpty()
+                    ? parsedResult.animeNames.get(0)
+                    : null;
+            return chooseFirstNonBlank(firstCandidate, parsedResult.animeTitle, getCurrentCandidateName(""));
+        }
+        return getCurrentCandidateName("");
+    }
+
     private int beginNewSearchGeneration() {
         activeSearchGeneration++;
+        clearConfirmedPilgrimageSelection();
         return activeSearchGeneration;
     }
 
@@ -3147,6 +3254,9 @@ public class MainActivity extends AppCompatActivity {
                 parsedResult.animeTitle,
                 "AI 识别结果"
         );
+        if (currentIdentifyMode == IdentifyMode.ANIME) {
+            animeDisplayName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), animeDisplayName);
+        }
         String locationDisplayName = chooseFirstNonBlank(
                 firstPoint.getName(),
                 parsedResult.locationName,
@@ -3316,6 +3426,16 @@ public class MainActivity extends AppCompatActivity {
             builder.append(line);
         }
         return builder.toString().trim();
+    }
+
+    private String joinLines(String... lines) {
+        List<String> lineList = new ArrayList<>();
+        if (lines != null) {
+            for (String line : lines) {
+                lineList.add(line);
+            }
+        }
+        return joinLines(lineList);
     }
 
     private String joinWithSeparator(List<String> values, String separator) {
