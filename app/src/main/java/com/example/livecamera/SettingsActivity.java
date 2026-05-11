@@ -1,5 +1,6 @@
 package com.example.livecamera;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.TextView;
@@ -36,6 +37,7 @@ public class SettingsActivity extends AppCompatActivity {
     private MaterialCardView rowPreviewMode;
     private MaterialCardView rowSaveAction;
     private MaterialCardView rowColorTheme;
+    private MaterialCardView rowFeatureGuide;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,6 +66,7 @@ public class SettingsActivity extends AppCompatActivity {
         rowPreviewMode = findViewById(R.id.rowPreviewMode);
         rowSaveAction = findViewById(R.id.rowSaveAction);
         rowColorTheme = findViewById(R.id.rowColorTheme);
+        rowFeatureGuide = findViewById(R.id.rowFeatureGuide);
     }
 
     private void initListeners() {
@@ -71,6 +74,7 @@ public class SettingsActivity extends AppCompatActivity {
         rowPreviewMode.setOnClickListener(view -> choosePreviewMode());
         rowSaveAction.setOnClickListener(view -> chooseSaveAction());
         rowColorTheme.setOnClickListener(view -> chooseColorTheme());
+        rowFeatureGuide.setOnClickListener(view -> startActivity(new Intent(this, FeatureGuideActivity.class)));
     }
 
     private void refreshSettingRows() {
@@ -97,6 +101,12 @@ public class SettingsActivity extends AppCompatActivity {
                 "颜色主题",
                 "先作用于首页关键按钮和导航入口",
                 getColorThemeLabel(getColorThemeValue())
+        );
+        bindSettingRow(
+                rowFeatureGuide,
+                "功能介绍",
+                "查看识别流程、模式说明和日记导出方法",
+                "查看"
         );
     }
 

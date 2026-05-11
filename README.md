@@ -1,372 +1,119 @@
 # LiveCamera-LBS
 
-<p align="center">
-  <img src="./docs/assets/hero-overview.svg" alt="LiveCamera-LBS Overview" width="100%" />
-</p>
+LiveCamera-LBS 是一个 Android 实景巡礼匹配助手。用户可以拍摄或上传现实场景图片，让 AI 判断它更适合动漫圣地巡礼还是国内旅行识别，并结合地点搜索、Anitabi/Bangumi 数据、地图导航和本地巡礼日记完成一次完整的打卡流程。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Android-Java-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android Java" />
-  <img src="https://img.shields.io/badge/AI-Doubao%20Vision-5E78F6?style=for-the-badge" alt="Doubao Vision" />
-  <img src="https://img.shields.io/badge/LBS-Tencent%20Map-00A1D6?style=for-the-badge" alt="Tencent Map" />
-  <img src="https://img.shields.io/badge/Mode-Dual%20Experience-FF9F43?style=for-the-badge" alt="Dual Mode" />
-  <img src="https://img.shields.io/badge/UI-Postcard%20%2F%20Film-111827?style=for-the-badge" alt="Postcard and Film UI" />
-</p>
+当前版本：**v1.5.0**
 
-<p align="center">
-  A portfolio-grade Android project that combines multimodal AI recognition, location intelligence, and dual-scene experience design.
-</p>
+[下载最新版 APK](https://github.com/ayumu317/livecamera/releases/latest)
 
----
+## 核心功能
 
-## Summary
+- **智能识别默认首页**：默认不强迫用户选择模式，由系统根据图片判断识别路线。
+- **动漫圣地巡礼**：适合街景、车站、学校、桥、展馆、海边、神社、商业街等巡礼图。
+- **国内旅行识别**：识别中国境内景点、城市地标、建筑和自然风光，并支持地图导航。
+- **作品名二次匹配**：用户选择或输入作品名后，系统会把“作品名 + 当前图片”再次交给 AI 匹配巡礼地点。
+- **候选巡礼地点**：Anitabi 返回多个点位时，先展示主结果，用户可点击“换一个结果”查看其他候选。
+- **作品介绍补全**：搜索到对应作品后，会补充 Bangumi 作品信息，例如中文名、原名、放送日期、集数、简介等。
+- **巡礼日记**：保存打卡记录，支持查看详情、删除记录、导出 JSON 或 TXT。
+- **独立设置页**：支持默认识别模式、图片预览方式、保存后动作、颜色主题和功能介绍。
 
-### 中文简介
-LiveCamera-LBS 是一个围绕“拍下眼前风景，进入正确体验路径”而设计的 Android 作品集项目。用户拍摄或选择一张真实世界的照片后，客户端会通过 Doubao Vision 对场景进行识别，并解析结构化结果。系统根据 `is_domestic` 自动分流：
+## 使用流程
 
-- 国内场景进入“明信片”旅游模式  
-  聚焦景点名称、详细地址、旅游科普介绍与地图导航
-- 海外场景进入“巡礼胶片”动漫模式  
-  聚焦作品匹配、原片参考图、圣地对比与巡礼解说
+1. 打开 App。
+2. 点击相册或拍照按钮，选择一张现实场景图片。
+3. 点击“开始识别”。
+4. 如果系统给出动漫作品候选，选择正确作品。
+5. 系统会结合“作品名 + 当前图片”再次匹配巡礼地点。
+6. 查看主结果、AI 巡礼解说和作品介绍。
+7. 如果结果不准确，点击“换一个结果”查看候选地点，或手动输入正确作品名重新匹配。
+8. 点击“记录打卡”保存到巡礼日记。
+9. 在巡礼日记中查看详情、删除记录，或导出 JSON/TXT。
 
-这不是一个停留在“识别是什么”的 demo，而是一个把 AI 理解、LBS 路由和 UI 语义设计真正串起来的 scenario-aware prototype。
+## 识别模式
 
-### English Summary
-LiveCamera-LBS is an Android prototype built around a simple idea: take a photo of a real-world scene, let multimodal AI understand it, and route the user into the right experience.
+### 智能识别
 
-After recognition via Doubao Vision, the app branches into:
+默认入口。系统根据图片内容判断更适合动漫巡礼还是国内旅行。
 
-- **Domestic Postcard Mode** for mainland China landmarks  
-  focused on address, travel storytelling, and navigation
-- **Overseas Film Mode** for anime pilgrimage scenes  
-  focused on title matching, reference frames, and fandom-oriented comparison
+### 动漫巡礼
 
-This project demonstrates not only mobile engineering integration, but also product thinking across AI parsing, LBS capability, and scenario-specific UI design.
+面向动漫圣地巡礼场景。该模式会优先保留动漫巡礼链路，不会因为模型偶尔返回国内景点就直接切走。适合上传海外街景、车站、学校、桥梁、展馆、海边、神社、商业街等素材。
 
----
+### 国内旅行
 
-## Highlights
+面向中国境内景点、城市地标、建筑和自然风光。该模式会强制走国内旅行展示链路，不调用动漫作品和巡礼点 API。
 
-- Dual-mode product architecture driven by structured AI recognition
-- Android client implemented in Java with production-style async flow control
-- Domestic travel flow integrated with Tencent location capability
-- Overseas pilgrimage flow integrated with Anitabi / Bangumi / SerpApi
-- Room-based local check-in diary for persistent user memory
-- Emulator and real-device backend联调 support
-- UI differentiation between two distinct emotional product identities
+## v1.5.0 更新重点
 
----
+- 新增独立设置页。
+- 新增功能介绍页面，说明上传识别流程、模式区别、日记导出和使用技巧。
+- 新增巡礼日记详情弹窗。
+- 新增日记删除功能。
+- 新增日记 JSON/TXT 导出。
+- 新增侧边栏入口。
+- 默认首页调整为智能识别。
+- 优化图片预览方式设置。
+- 新增颜色主题设置。
+- 动漫巡礼结果补充 Bangumi 作品介绍。
+- 强化保存快照，减少展示结果与保存记录不一致的问题。
 
-## Product Preview
+## 技术栈
 
-### Domestic Mode · Postcard Travel
-
-<p>
-  <img src="./docs/assets/ui-domestic-mode.svg" alt="Domestic Mode Preview" width="100%" />
-</p>
-
-**Design language**
-
-- warm postcard-like card container
-- calm editorial spacing and typography
-- landmark-first information hierarchy
-- navigation as the primary action
-- AI-generated travel introduction for leisure reading
-
-### Overseas Mode · Film Pilgrimage
-
-<p>
-  <img src="./docs/assets/ui-overseas-mode.svg" alt="Overseas Mode Preview" width="100%" />
-</p>
-
-**Design language**
-
-- dark film-strip inspired container
-- vivid anime-themed badge
-- white-framed visual reference area
-- subtitle-like commentary typography
-- stronger contrast for emotional immersion
-
----
-
-## Architecture
-
-<p>
-  <img src="./docs/assets/architecture-overview.svg" alt="Architecture Overview" width="100%" />
-</p>
-
-### High-Level Flow
-
-```text
-Camera / Gallery Image
-        ↓
-Doubao Vision Multimodal Recognition
-        ↓
-Parse structured result:
-- anime_names
-- location_name
-- description
-- is_domestic
-        ↓
-        ├── is_domestic = true
-        │      ↓
-        │   Tencent single-shot location
-        │      ↓
-        │   Spring Boot location gateway
-        │      ↓
-        │   Postcard travel UI + navigation + check-in
-        │
-        └── is_domestic = false
-               ↓
-            Overseas route gateway
-               ↓
-            Anitabi / Bangumi / SerpApi fallback
-               ↓
-            Film pilgrimage UI + reference matching + diary
-```
-
----
-
-## Tech Stack
-
-### Android Client
-
-- Java
-- Android SDK
+- Android Java
 - Material Design Components
+- DrawerLayout
+- Room
 - Glide
 - Gson
 - OkHttp
-- Room
+- Doubao Responses API
 - Tencent Location SDK
-- Doubao Vision API
+- Anitabi API
+- Bangumi API
+- SerpApi fallback
 
-### Companion Backend
-
-- Java
-- Spring Boot
-- RESTful API
-- smart routing gateway for domestic / overseas scenes
-- ngrok-compatible remote debugging workflow
-
-### External Services
-
-- Doubao Vision multimodal recognition
-- Tencent map / location capability
-- Anitabi pilgrimage data
-- Bangumi metadata
-- SerpApi image fallback
-
----
-
-## Repository Structure
-
-```text
-livecamera/
-├── app/                       # Android application module
-│   ├── src/
-│   ├── build.gradle.kts
-│   └── ...
-├── docs/
-│   └── assets/                # README visual assets
-├── scripts/
-│   └── upload_to_github.bat   # Windows upload helper
-├── gradle/
-├── build.gradle.kts
-├── settings.gradle.kts
-└── README.md
-```
-
-> Note  
-> This repository currently hosts the Android client. The Spring Boot intelligent gateway is used as a companion backend service during联调 and deployment.
-
----
-
-## Companion Backend API
-
-### Location Search
-
-```http
-GET /api/location/search?keyword={keyword}&isDomestic={true|false}
-```
-
-### Example Response
-
-```json
-{
-  "name": "故宫博物院",
-  "address": "北京市东城区景山前街4号",
-  "longitude": 116.397,
-  "latitude": 39.918
-}
-```
-
-### Behavior
-
-- `200 OK`: location found
-- `404 Not Found`: location not found
-
----
-
-## Quick Start
-
-### 1. Build Android Client
-
-From the repository root:
+## 本地构建
 
 ```bash
 ./gradlew.bat :app:assembleDebug --console=plain
 ```
 
-Then open the project in Android Studio and run it on:
-
-- Android Emulator
-- Physical Android Device
-
-### 2. Start Companion Backend
-
-Run the Spring Boot gateway in your backend project separately:
-
-```bash
-./mvnw spring-boot:run
-```
-
-Default local backend address:
+构建完成后，APK 位于：
 
 ```text
-http://localhost:8080
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 3. Optional GitHub Upload Script
+## 配置
 
-A Windows batch helper is included here:
+敏感配置放在 `local.properties`，不要提交到仓库。
 
-```text
-scripts/upload_to_github.bat
+```properties
+ARK_API_KEY=你的火山方舟 API Key
+DOUBAO_MODEL_ID=doubao-seed-2-0-lite-260428
+DOUBAO_RESPONSES_URL=https://ark.cn-beijing.volces.com/api/v3/responses
+TENCENT_MAP_SDK_KEY=你的腾讯地图 SDK Key
+SERPAPI_KEY=你的 SerpApi Key
 ```
 
-It can help you:
+项目仍保留旧字段兼容：
 
-- initialize Git if needed
-- add all files
-- create a commit
-- ask for the remote repository URL
-- push the project to GitHub
-
-Before using it, please check `.gitignore` carefully to avoid uploading `build/`, `.gradle/`, `.idea/`, `target/`, `local.properties`, and other local or generated files.
-
----
-
-## Configuration
-
-### Doubao Vision
-
-Configure the following in `local.properties` or Gradle properties:
-
-- `DOUBAO_BASE_URL`
-- `DOUBAO_API_KEY`
-- `DOUBAO_MODEL`
-
-### Tencent Map / Location
-
-- `TENCENT_MAP_SDK_KEY`
-
-### Android → Backend Base URL
-
-For emulator:
-
-```text
-http://10.0.2.2:8080
+```properties
+DOUBAO_BASE_URL=
+DOUBAO_API_KEY=
+DOUBAO_MODEL=
 ```
 
-For physical devices, replace with your LAN IP:
+## 数据安全
 
-```text
-http://192.168.1.100:8080
-```
+- API Key 不写入源码。
+- `local.properties` 不应提交。
+- 巡礼日记目前保存在本地 Room 数据库。
+- 日记导出文件通过系统分享面板导出，支持 JSON 和 TXT。
 
----
+## 适合的测试图片
 
-## ngrok Remote Debugging
+- 动漫巡礼：车站、学校、桥、海边、展馆、神社、商业街、街道路口。
+- 国内旅行：东方明珠、故宫、西湖、城市地标、自然风景。
 
-When the backend needs to be accessed by a real mobile device outside the local direct environment, use ngrok:
-
-```bash
-ngrok http 8080
-```
-
-Then replace the Android-side backend base URL with the generated public tunnel address.
-
-This is especially helpful for:
-
-- real-device joint debugging
-- remote demo sessions
-- portfolio recording
-- cross-network integration verification
-
----
-
-## UI / UX Design Thinking
-
-### Domestic Mode: "Postcard"
-
-The domestic experience is warm, calm, and editorial.
-
-- landmark-first presentation
-- travel-friendly reading rhythm
-- address and introduction as primary content
-- navigation-first CTA
-- visual tone closer to a refined postcard than a utility app
-
-### Overseas Mode: "Film"
-
-The overseas experience is more emotional, collectible, and cinematic.
-
-- film-strip inspired container
-- fandom-oriented visual hierarchy
-- screenshot presentation with framed-photo feeling
-- commentary typography inspired by subtitle rhythm
-- stronger contrast to emphasize scene comparison
-
-The design goal is not just visual difference, but **semantic difference**:  
-the UI should tell the user what kind of journey they are on before they even start reading.
-
----
-
-## Why This Project Stands Out
-
-LiveCamera-LBS is not just a technical integration sample. It demonstrates:
-
-- multimodal AI as a business decision input
-- backend routing as a product intelligence layer
-- frontend architecture shaped by scene semantics
-- scenario-specific UI rather than one-size-fits-all presentation
-- thoughtful integration between recognition, navigation, and memory capture
-
-This makes the project especially suitable for a portfolio that aims to showcase:
-
-- Android engineering
-- full-stack product implementation
-- AI-enhanced UX architecture
-- map / LBS capability
-- practical scenario-driven design thinking
-
----
-
-## Future Directions
-
-- route planning and nearby POI recommendation
-- weather / ticket / opening-hours integration for domestic mode
-- multi-point anime pilgrimage route generation
-- cloud sync for user diary data
-- multilingual support
-- production deployment with auth, analytics, and observability
-
----
-
-## Author Note
-
-LiveCamera-LBS is designed as a portfolio-grade prototype that balances engineering implementation with product polish.
-
-It aims to answer a more interesting question than "can AI recognize this image?":
-
-**Can AI recognize a scene, understand the user's context, and then guide them into the right experience?**
+如果知道作品名，建议在动漫巡礼模式下输入正确作品名重新匹配，系统会结合当前图片再次判断地点线索。

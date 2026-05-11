@@ -33,6 +33,10 @@
         </provider>
 
         <activity
+            android:name=".FeatureGuideActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false" />
 
