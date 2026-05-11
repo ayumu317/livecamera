@@ -1,6 +1,7 @@
 package com.example.livecamera;
 
 import android.Manifest;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.Intent;
 import android.animation.ObjectAnimator;
@@ -8,6 +9,7 @@ import android.animation.ValueAnimator;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
@@ -20,6 +22,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.LinearInterpolator;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -34,8 +37,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
+import androidx.core.view.GravityCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.bumptech.glide.Glide;
@@ -49,7 +54,9 @@ import com.google.gson.JsonParser;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.chip.Chip;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.imageview.ShapeableImageView;
+import com.google.android.material.navigation.NavigationView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -75,6 +82,19 @@ public class MainActivity extends AppCompatActivity {
     private static final int JPEG_QUALITY = 80;
     private static final String PRIVATE_CAPTURE_DIR_NAME = "livecamera_captures";
     private static final String CACHE_CAPTURE_DIR_NAME = "images";
+    private static final String PREFS_NAME = "livecamera_settings";
+    private static final String PREF_DEFAULT_MODE = "default_identify_mode";
+    private static final String PREF_PREVIEW_MODE = "preview_mode";
+    private static final String PREF_SAVE_ACTION = "save_action";
+    private static final String PREF_COLOR_THEME = "color_theme";
+    private static final String PREVIEW_FIT = "fit";
+    private static final String PREVIEW_FILL = "fill";
+    private static final String SAVE_ACTION_STAY = "stay";
+    private static final String SAVE_ACTION_OPEN_DIARY = "open_diary";
+    private static final String THEME_DEFAULT = "default";
+    private static final String THEME_MINT = "mint";
+    private static final String THEME_WARM = "warm";
+    private static final String THEME_DARK = "dark";
     private static final String DEFAULT_RESULT_HINT = "请选择一张实景照片，然后点击“开始识别”。";
     private static final String DEFAULT_DESC_HINT = "等待识别结果";
 
@@ -85,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnOpenCamera;
     private MaterialButton btnOpenGallery;
     private MaterialButton btnStartMatch;
+    private MaterialButton btnDrawerMenu;
     private MaterialButton btnDiary;
     private MaterialButton btnModeAnime;
     private MaterialButton btnModeDomestic;
@@ -113,6 +134,13 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvDesc;
     private View previewScrimView;
     private View scanlineView;
+    private DrawerLayout drawerLayout;
+    private NavigationView navigationView;
+    private SharedPreferences appSettings;
+    private String previewMode = PREVIEW_FIT;
+    private String saveAction = SAVE_ACTION_STAY;
+    private String colorTheme = THEME_DEFAULT;
+    private boolean refreshSettingsOnResume;
 
     private ActivityResultLauncher<String> galleryLauncher;
     private ActivityResultLauncher<Uri> cameraLauncher;
@@ -149,12 +177,15 @@ public class MainActivity extends AppCompatActivity {
     private List<String> currentVisualKeywords;
     private List<String> currentSpotSearchKeywords;
     private Set<Integer> currentTriedSubjectIds;
+    private boolean hasSpotCandidateOptions;
+    private boolean spotCandidateListExpanded;
+    private boolean allowManualAnimeRematch;
     private int activeSearchGeneration = 0;
     private int pendingLocationPermissionSearchGeneration = -1;
     private DeviceLocationSnapshot currentDeviceLocation;
     private LocationNavigationTarget currentNavigationTarget;
     private ResultMode currentResultMode = ResultMode.NONE;
-    private IdentifyMode currentIdentifyMode = IdentifyMode.ANIME;
+    private IdentifyMode currentIdentifyMode = IdentifyMode.AUTO;
 
     private enum IdentifyMode {
         AUTO,
@@ -264,6 +295,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         applyWindowInsets();
         bindViews();
+        loadAppSettings();
         initActivityResultLaunchers();
         doubaoVisionClient = new DoubaoVisionClient();
         anitabiApiClient = new AnitabiApiClient();
@@ -276,6 +308,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (appSettings != null && refreshSettingsOnResume) {
+            refreshSettingsOnResume = false;
+            loadAppSettings();
+            applyAppSettingsToUi();
+        }
+    }
+
+    @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         if (selectedImageUri != null) {
@@ -284,6 +326,15 @@ public class MainActivity extends AppCompatActivity {
         if (pendingCameraImageUri != null) {
             outState.putString(STATE_PENDING_CAMERA_URI, pendingCameraImageUri.toString());
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            return;
+        }
+        super.onBackPressed();
     }
 
     @Override
@@ -308,6 +359,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void bindViews() {
+        drawerLayout = findOptionalViewByName("drawerLayout");
+        navigationView = findOptionalViewByName("navigationView");
         ivScenePreview = findViewById(R.id.iv_preview);
         ivResultReference = findViewById(R.id.iv_result_reference);
         tvPreviewPlaceholderHint = findViewById(R.id.tvPreviewPlaceholderHint);
@@ -315,6 +368,7 @@ public class MainActivity extends AppCompatActivity {
         btnOpenCamera = findViewById(R.id.btn_camera);
         btnOpenGallery = findViewById(R.id.btn_gallery);
         btnStartMatch = findViewById(R.id.btn_identify);
+        btnDrawerMenu = findOptionalViewByName("btnDrawerMenu");
         btnDiary = findOptionalViewByName("btn_diary");
         btnModeAnime = findViewById(R.id.btnModeAnime);
         btnModeDomestic = findViewById(R.id.btnModeDomestic);
@@ -361,6 +415,7 @@ public class MainActivity extends AppCompatActivity {
         }
         tvResultSummary.setText(DEFAULT_RESULT_HINT);
         updateIdentifyModeButtons();
+        applyAppSettingsToUi();
         if (tvDesc != null) {
             tvDesc.setText(DEFAULT_DESC_HINT);
         }
@@ -387,6 +442,31 @@ public class MainActivity extends AppCompatActivity {
         btnOpenGallery.setOnClickListener(view -> galleryLauncher.launch("image/*"));
         btnOpenCamera.setOnClickListener(view -> openCamera());
         btnStartMatch.setOnClickListener(view -> startIdentifyFlow());
+        if (btnDrawerMenu != null) {
+            btnDrawerMenu.setOnClickListener(view -> openDrawerMenu());
+        }
+        if (navigationView != null) {
+            navigationView.setNavigationItemSelectedListener(item -> {
+                int itemId = item.getItemId();
+                if (itemId == R.id.nav_mode_auto) {
+                    setIdentifyMode(IdentifyMode.AUTO);
+                } else if (itemId == R.id.nav_mode_anime) {
+                    setIdentifyMode(IdentifyMode.ANIME);
+                } else if (itemId == R.id.nav_mode_domestic) {
+                    setIdentifyMode(IdentifyMode.DOMESTIC);
+                } else if (itemId == R.id.nav_diary) {
+                    openPilgrimDiary();
+                } else if (itemId == R.id.nav_pick_image) {
+                    galleryLauncher.launch("image/*");
+                } else if (itemId == R.id.nav_settings) {
+                    openSettingsPage();
+                } else if (itemId == R.id.nav_about) {
+                    showToast("默认智能识别；可从侧边栏切换动漫巡礼或国内旅行。");
+                }
+                closeDrawerMenu();
+                return true;
+            });
+        }
         btnModeAnime.setOnClickListener(view -> setIdentifyMode(IdentifyMode.ANIME));
         btnModeDomestic.setOnClickListener(view -> setIdentifyMode(IdentifyMode.DOMESTIC));
         btnModeAuto.setOnClickListener(view -> setIdentifyMode(IdentifyMode.AUTO));
@@ -404,6 +484,12 @@ public class MainActivity extends AppCompatActivity {
         }
         if (btnNextOption != null) {
             btnNextOption.setOnClickListener(v -> {
+                if (hasSpotCandidateOptions && !spotCandidateListExpanded) {
+                    setSpotCandidateListExpanded(true);
+                    allowManualAnimeRematch = false;
+                    updateManualAnimeRematchVisibility();
+                    return;
+                }
                 if (currentCandidateNames != null && currentCandidateIndex + 1 < currentCandidateNames.size()) {
                     currentCandidateIndex++;
                     showProcessingPlaceholder();
@@ -446,9 +532,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setIdentifyMode(IdentifyMode identifyMode) {
-        IdentifyMode nextIdentifyMode = identifyMode != null ? identifyMode : IdentifyMode.ANIME;
+        IdentifyMode nextIdentifyMode = identifyMode != null ? identifyMode : IdentifyMode.AUTO;
         if (currentIdentifyMode != nextIdentifyMode) {
-            clearConfirmedPilgrimageSelection();
+            resetResultsForModeSwitch();
         }
         currentIdentifyMode = nextIdentifyMode;
         updateIdentifyModeButtons();
@@ -460,21 +546,306 @@ public class MainActivity extends AppCompatActivity {
         applyIdentifyModeButtonState(btnModeAnime, currentIdentifyMode == IdentifyMode.ANIME);
         applyIdentifyModeButtonState(btnModeDomestic, currentIdentifyMode == IdentifyMode.DOMESTIC);
         applyIdentifyModeButtonState(btnModeAuto, currentIdentifyMode == IdentifyMode.AUTO);
+        updateNavigationModeState();
     }
 
     private void applyIdentifyModeButtonState(@Nullable MaterialButton button, boolean selected) {
         if (button == null) {
             return;
         }
-        int selectedColor = ContextCompat.getColor(this, R.color.brand_primary);
+        int selectedColor = getThemePrimaryColor();
         int unselectedColor = ContextCompat.getColor(this, R.color.chip_brand_background);
         int selectedTextColor = ContextCompat.getColor(this, android.R.color.white);
-        int unselectedTextColor = ContextCompat.getColor(this, R.color.brand_primary);
-        int strokeColor = ContextCompat.getColor(this, selected ? R.color.brand_primary : R.color.card_stroke);
+        int unselectedTextColor = getThemePrimaryColor();
+        int strokeColor = selected ? getThemePrimaryColor() : ContextCompat.getColor(this, R.color.card_stroke);
         button.setSelected(selected);
         button.setTextColor(selected ? selectedTextColor : unselectedTextColor);
         button.setBackgroundTintList(ColorStateList.valueOf(selected ? selectedColor : unselectedColor));
         button.setStrokeColor(ColorStateList.valueOf(strokeColor));
+    }
+
+    private void openDrawerMenu() {
+        if (drawerLayout != null) {
+            drawerLayout.openDrawer(GravityCompat.START);
+        }
+    }
+
+    private void closeDrawerMenu() {
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+    }
+
+    private void updateNavigationModeState() {
+        if (navigationView == null) {
+            return;
+        }
+        int checkedId;
+        if (currentIdentifyMode == IdentifyMode.ANIME) {
+            checkedId = R.id.nav_mode_anime;
+        } else if (currentIdentifyMode == IdentifyMode.DOMESTIC) {
+            checkedId = R.id.nav_mode_domestic;
+        } else {
+            checkedId = R.id.nav_mode_auto;
+        }
+        navigationView.setCheckedItem(checkedId);
+    }
+
+    private void openSettingsPanel() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("设置")
+                .setMessage("这里会用于管理默认识别模式、API 配置提示、保存偏好和更多辅助功能。\n\n当前默认首页为智能识别，可从侧边栏切换动漫巡礼或国内旅行。")
+                .setPositiveButton("知道了", null)
+                .show();
+    }
+
+    private void openSettingsPage() {
+        refreshSettingsOnResume = true;
+        startActivity(new Intent(this, SettingsActivity.class));
+    }
+
+    private void openSettingsMenu() {
+        String[] items = new String[] {
+                "默认识别模式：" + getIdentifyModeLabel(currentIdentifyMode),
+                "图片预览方式：" + getPreviewModeLabel(previewMode),
+                "保存后动作：" + getSaveActionLabel(saveAction),
+                "颜色主题：" + getColorThemeLabel(colorTheme)
+        };
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("设置")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        openDefaultModeSetting();
+                    } else if (which == 1) {
+                        openPreviewModeSetting();
+                    } else if (which == 2) {
+                        openSaveActionSetting();
+                    } else if (which == 3) {
+                        openColorThemeSetting();
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .show();
+    }
+
+    private void resetResultsForModeSwitch() {
+        beginNewSearchGeneration();
+        clearLocationRoutingState();
+        clearResultDisplay();
+        updateLoadingState(false);
+        clearCurrentResultSnapshot();
+        clearCurrentCandidateState();
+        tvResultSummary.setText(DEFAULT_RESULT_HINT);
+        if (tvDesc != null) {
+            tvDesc.setText(DEFAULT_DESC_HINT);
+        }
+        updateManualAnimeRematchVisibility();
+        updateNextOptionButtonState();
+        updateNavigateButtonState();
+    }
+
+    private void loadAppSettings() {
+        appSettings = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        currentIdentifyMode = readIdentifyModeSetting(
+                appSettings.getString(PREF_DEFAULT_MODE, IdentifyMode.AUTO.name())
+        );
+        previewMode = chooseKnownValue(
+                appSettings.getString(PREF_PREVIEW_MODE, PREVIEW_FIT),
+                PREVIEW_FIT,
+                PREVIEW_FILL
+        );
+        saveAction = chooseKnownValue(
+                appSettings.getString(PREF_SAVE_ACTION, SAVE_ACTION_STAY),
+                SAVE_ACTION_STAY,
+                SAVE_ACTION_OPEN_DIARY
+        );
+        colorTheme = chooseKnownValue(
+                appSettings.getString(PREF_COLOR_THEME, THEME_DEFAULT),
+                THEME_DEFAULT,
+                THEME_MINT,
+                THEME_WARM,
+                THEME_DARK
+        );
+    }
+
+    private void openDefaultModeSetting() {
+        IdentifyMode[] modes = new IdentifyMode[] {
+                IdentifyMode.AUTO,
+                IdentifyMode.ANIME,
+                IdentifyMode.DOMESTIC
+        };
+        String[] labels = new String[] {"智能识别", "动漫巡礼", "国内旅行"};
+        int checked = currentIdentifyMode == IdentifyMode.ANIME ? 1
+                : currentIdentifyMode == IdentifyMode.DOMESTIC ? 2 : 0;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("默认识别模式")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    IdentifyMode selectedMode = modes[Math.max(0, Math.min(which, modes.length - 1))];
+                    appSettings.edit().putString(PREF_DEFAULT_MODE, selectedMode.name()).apply();
+                    setIdentifyMode(selectedMode);
+                    dialog.dismiss();
+                    showToast("默认识别模式已更新");
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void openPreviewModeSetting() {
+        String[] labels = new String[] {"完整显示", "填充裁剪"};
+        int checked = PREVIEW_FILL.equals(previewMode) ? 1 : 0;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("图片预览方式")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    previewMode = which == 1 ? PREVIEW_FILL : PREVIEW_FIT;
+                    appSettings.edit().putString(PREF_PREVIEW_MODE, previewMode).apply();
+                    applyPreviewMode();
+                    dialog.dismiss();
+                    showToast("图片预览方式已更新");
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void openSaveActionSetting() {
+        String[] labels = new String[] {"停留当前页", "保存后打开巡礼日记"};
+        int checked = SAVE_ACTION_OPEN_DIARY.equals(saveAction) ? 1 : 0;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("保存后动作")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    saveAction = which == 1 ? SAVE_ACTION_OPEN_DIARY : SAVE_ACTION_STAY;
+                    appSettings.edit().putString(PREF_SAVE_ACTION, saveAction).apply();
+                    dialog.dismiss();
+                    showToast("保存后动作已更新");
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void openColorThemeSetting() {
+        String[] labels = new String[] {"默认蓝紫", "清爽青绿", "暖色旅行", "深色预览"};
+        String[] values = new String[] {THEME_DEFAULT, THEME_MINT, THEME_WARM, THEME_DARK};
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(colorTheme)) {
+                checked = i;
+                break;
+            }
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("颜色主题")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    int safeIndex = Math.max(0, Math.min(which, values.length - 1));
+                    colorTheme = values[safeIndex];
+                    appSettings.edit().putString(PREF_COLOR_THEME, colorTheme).apply();
+                    applyAppSettingsToUi();
+                    dialog.dismiss();
+                    showToast("颜色主题已更新");
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void applyAppSettingsToUi() {
+        applyPreviewMode();
+        applyColorTheme();
+        updateIdentifyModeButtons();
+    }
+
+    private void applyPreviewMode() {
+        if (ivScenePreview == null) {
+            return;
+        }
+        ivScenePreview.setScaleType(PREVIEW_FILL.equals(previewMode)
+                ? ImageView.ScaleType.CENTER_CROP
+                : ImageView.ScaleType.FIT_CENTER);
+    }
+
+    private void applyColorTheme() {
+        int primaryColor = getThemePrimaryColor();
+        ColorStateList primaryTint = ColorStateList.valueOf(primaryColor);
+        if (btnStartMatch != null) {
+            btnStartMatch.setBackgroundTintList(primaryTint);
+        }
+        if (btnSaveRecord != null) {
+            btnSaveRecord.setBackgroundTintList(primaryTint);
+        }
+        if (btnDrawerMenu != null) {
+            btnDrawerMenu.setTextColor(primaryColor);
+            btnDrawerMenu.setIconTint(primaryTint);
+        }
+        if (navigationView != null) {
+            navigationView.setItemIconTintList(primaryTint);
+            navigationView.setItemTextColor(primaryTint);
+        }
+    }
+
+    private IdentifyMode readIdentifyModeSetting(@Nullable String value) {
+        if (IdentifyMode.ANIME.name().equals(value)) {
+            return IdentifyMode.ANIME;
+        }
+        if (IdentifyMode.DOMESTIC.name().equals(value)) {
+            return IdentifyMode.DOMESTIC;
+        }
+        return IdentifyMode.AUTO;
+    }
+
+    private String chooseKnownValue(String value, String fallback, String... allowed) {
+        if (value == null) {
+            return fallback;
+        }
+        if (fallback.equals(value)) {
+            return value;
+        }
+        for (String item : allowed) {
+            if (item.equals(value)) {
+                return value;
+            }
+        }
+        return fallback;
+    }
+
+    private String getIdentifyModeLabel(IdentifyMode identifyMode) {
+        if (identifyMode == IdentifyMode.ANIME) {
+            return "动漫巡礼";
+        }
+        if (identifyMode == IdentifyMode.DOMESTIC) {
+            return "国内旅行";
+        }
+        return "智能识别";
+    }
+
+    private String getPreviewModeLabel(String value) {
+        return PREVIEW_FILL.equals(value) ? "填充裁剪" : "完整显示";
+    }
+
+    private String getSaveActionLabel(String value) {
+        return SAVE_ACTION_OPEN_DIARY.equals(value) ? "打开巡礼日记" : "停留当前页";
+    }
+
+    private String getColorThemeLabel(String value) {
+        if (THEME_MINT.equals(value)) {
+            return "清爽青绿";
+        }
+        if (THEME_WARM.equals(value)) {
+            return "暖色旅行";
+        }
+        if (THEME_DARK.equals(value)) {
+            return "深色预览";
+        }
+        return "默认蓝紫";
+    }
+
+    private int getThemePrimaryColor() {
+        if (THEME_MINT.equals(colorTheme)) {
+            return Color.parseColor("#1FAE9A");
+        }
+        if (THEME_WARM.equals(colorTheme)) {
+            return Color.parseColor("#E07A3F");
+        }
+        if (THEME_DARK.equals(colorTheme)) {
+            return Color.parseColor("#3F4A68");
+        }
+        return ContextCompat.getColor(this, R.color.brand_primary);
     }
 
     private void startManualAnimeRematch() {
@@ -761,7 +1132,7 @@ public class MainActivity extends AppCompatActivity {
 
         Glide.with(this)
                 .load(imageUri)
-                .centerCrop()
+                .fitCenter()
                 .listener(new RequestListener<Drawable>() {
                     @Override
                     public boolean onLoadFailed(
@@ -814,6 +1185,7 @@ public class MainActivity extends AppCompatActivity {
         int searchGeneration = beginNewSearchGeneration();
         IdentifyMode identifyModeForRequest = currentIdentifyMode;
         Log.d(DEBUG_TAG, "currentIdentifyMode=" + identifyModeForRequest);
+        Log.d(DEBUG_TAG, "requestDoubaoMode=" + toDoubaoMode(identifyModeForRequest));
         Uri imageUri = selectedImageUri;
         backgroundExecutor.execute(() -> {
             final String base64Image;
@@ -898,10 +1270,22 @@ public class MainActivity extends AppCompatActivity {
             lastParsedResult = parsedResult;
             if (parsedResult.isDomestic) {
                 prepareDomesticRoute(parsedResult, searchGeneration, "AUTO_DOMESTIC");
+                Log.d(DEBUG_TAG, "auto mode started, route=DOMESTIC");
+                Log.d(DEBUG_TAG, "finalRoute=AUTO_DOMESTIC");
+                requestLocationGateway(parsedResult, searchGeneration);
             } else {
-                prepareAnimeRoute(parsedResult, "AUTO_ANIME");
+                ParsedResult animeResult = copyParsedResultWithRoute(parsedResult, false);
+                lastParsedResult = animeResult;
+                prepareAnimeRoute(animeResult, "AUTO_ANIME");
+                Log.d(DEBUG_TAG, "auto mode started, route=ANIME");
+                Log.d(DEBUG_TAG, "auto anime candidates = " + animeResult.animeNames);
+                if (animeResult.animeNames == null || animeResult.animeNames.isEmpty()) {
+                    renderAnimeModeNoCandidate(animeResult, false);
+                    return;
+                }
+                renderInitialAnimeCandidates(animeResult);
+                return;
             }
-            requestLocationGateway(parsedResult, searchGeneration);
         });
     }
 
@@ -1118,6 +1502,8 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             clearAnimeCandidateViews();
+            allowManualAnimeRematch = true;
+            updateManualAnimeRematchVisibility();
             cardResult.setVisibility(View.VISIBLE);
             chipResultState.setText("作品待确认");
             chipConfidence.setText("动漫巡礼模式");
@@ -1156,6 +1542,8 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
+            allowManualAnimeRematch = true;
+            updateManualAnimeRematchVisibility();
             chipResultState.setText("作品候选");
             chipConfidence.setText("等待确认");
             tvAnimeTitle.setText("请选择作品后重新匹配图片");
@@ -1221,7 +1609,32 @@ public class MainActivity extends AppCompatActivity {
     private void clearSpotCandidateViews() {
         if (layoutSpotCandidateList != null) {
             layoutSpotCandidateList.removeAllViews();
+            layoutSpotCandidateList.setVisibility(View.GONE);
         }
+        hasSpotCandidateOptions = false;
+        spotCandidateListExpanded = false;
+    }
+
+    private void setSpotCandidateListExpanded(boolean expanded) {
+        spotCandidateListExpanded = expanded && hasSpotCandidateOptions;
+        if (layoutSpotCandidateList != null) {
+            layoutSpotCandidateList.setVisibility(spotCandidateListExpanded ? View.VISIBLE : View.GONE);
+        }
+        Log.d(DEBUG_TAG, "spotCandidateListExpanded=" + spotCandidateListExpanded);
+        updateNextOptionButtonState();
+    }
+
+    private void updateManualAnimeRematchVisibility() {
+        if (layoutAnimeRematch == null) {
+            return;
+        }
+        boolean showAnimeRematch = currentResultMode == ResultMode.OVERSEAS
+                && allowManualAnimeRematch
+                && (currentIdentifyMode == IdentifyMode.ANIME
+                || (currentIdentifyMode == IdentifyMode.AUTO
+                && lastParsedResult != null
+                && !lastParsedResult.isDomestic));
+        layoutAnimeRematch.setVisibility(showAnimeRematch ? View.VISIBLE : View.GONE);
     }
 
     private void renderDomesticTravelResult(ParsedResult parsedResult, boolean fromGateway) {
@@ -1248,6 +1661,16 @@ public class MainActivity extends AppCompatActivity {
             ivResultReference.setVisibility(View.GONE);
             tvResultSummary.setText(parsedResult.summary != null ? parsedResult.summary : DEFAULT_RESULT_HINT);
             updateCurrentResultSnapshot(
+                    locationDisplayName,
+                    chooseFirstNonBlank(
+                            currentNavigationTarget != null ? currentNavigationTarget.address : null,
+                            locationDisplayName
+                    ),
+                    buildDomesticRecordDescription(parsedResult, locationDisplayName),
+                    null
+            );
+            setConfirmedPilgrimageSelection(
+                    locationDisplayName,
                     locationDisplayName,
                     chooseFirstNonBlank(
                             currentNavigationTarget != null ? currentNavigationTarget.address : null,
@@ -1373,7 +1796,7 @@ public class MainActivity extends AppCompatActivity {
                     if (isStaleSearch(searchGeneration)) {
                         return;
                     }
-                    requestPointsDetail(parsedResult, bangumiLiteResponse, subjectId, searchGeneration);
+                    requestBangumiSubjectInfo(parsedResult, bangumiLiteResponse, subjectId, searchGeneration);
                 });
             }
 
@@ -1390,6 +1813,38 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     renderPartialSuccess(parsedResult.animeTitle, parsedResult.locationName, parsedResult.summary);
+                });
+            }
+        });
+    }
+
+    private void requestBangumiSubjectInfo(
+            ParsedResult parsedResult,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
+            int subjectId,
+            int searchGeneration
+    ) {
+        anitabiApiClient.getBangumiSubjectInfo(subjectId, new AnitabiApiClient.ApiCallback<AnitabiApiClient.BangumiSubjectInfo>() {
+            @Override
+            public void onSuccess(AnitabiApiClient.BangumiSubjectInfo subjectInfo) {
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    bangumiLiteResponse.applySubjectInfo(subjectInfo);
+                    Log.d(DEBUG_TAG, "bangumi subject info loaded for subjectId=" + subjectId);
+                    requestPointsDetail(parsedResult, bangumiLiteResponse, subjectId, searchGeneration);
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    Log.w(DEBUG_TAG, "Bangumi subject info unavailable, continue with anitabi lite", e);
+                    requestPointsDetail(parsedResult, bangumiLiteResponse, subjectId, searchGeneration);
                 });
             }
         });
@@ -1562,6 +2017,13 @@ public class MainActivity extends AppCompatActivity {
             updateNextOptionButtonState();
             updateNavigateButtonState();
             updateCurrentResultSnapshot(animeName, locationDisplayName, description, imageUrl);
+            setConfirmedPilgrimageSelection(
+                    animeName,
+                    locationDisplayName,
+                    locationDisplayName,
+                    description,
+                    imageUrl
+            );
         });
     }
 
@@ -1588,6 +2050,13 @@ public class MainActivity extends AppCompatActivity {
             updateNextOptionButtonState();
             updateNavigateButtonState();
             updateCurrentResultSnapshot(animeName, safeLocationName, description, null);
+            setConfirmedPilgrimageSelection(
+                    animeName,
+                    safeLocationName,
+                    safeLocationName,
+                    description,
+                    null
+            );
         });
     }
 
@@ -1647,6 +2116,13 @@ public class MainActivity extends AppCompatActivity {
                     descriptionText,
                     pointImageUrl
             );
+            setConfirmedPilgrimageSelection(
+                    animeDisplayName,
+                    chooseFirstNonBlank(firstPoint.getName(), locationDisplayName),
+                    locationDisplayName,
+                    descriptionText,
+                    pointImageUrl
+            );
             updateNextOptionButtonState();
             updateNavigateButtonState();
 
@@ -1675,6 +2151,10 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
+            hasSpotCandidateOptions = sortedCandidates != null && !sortedCandidates.isEmpty();
+            spotCandidateListExpanded = false;
+            allowManualAnimeRematch = !hasSpotCandidateOptions;
+            updateManualAnimeRematchVisibility();
             chipResultState.setText("圣地巡礼");
             chipConfidence.setText("AI 已匹配");
             String animeDisplayName = chooseFirstNonBlank(
@@ -1689,6 +2169,7 @@ public class MainActivity extends AppCompatActivity {
                     parsedResult.summary,
                     "AI 已结合指定作品和当前图片重新提取地点线索，请从下方其他可能的巡礼地点中确认。"
             );
+            descriptionText = appendWorkIntroToDescription(descriptionText, bangumiLiteResponse);
             tvAnimeTitle.setText(animeDisplayName);
             tvLocationName.setVisibility(View.VISIBLE);
             tvLocationName.setText(locationDisplayName);
@@ -1709,7 +2190,12 @@ public class MainActivity extends AppCompatActivity {
                     descriptionText,
                     null
             );
-            renderSpotCandidateList(parsedResult, bangumiLiteResponse, sortedCandidates, pointDetails.size());
+            if (hasSpotCandidateOptions) {
+                renderSpotCandidateList(parsedResult, bangumiLiteResponse, sortedCandidates, pointDetails.size());
+                setSpotCandidateListExpanded(false);
+            } else {
+                clearSpotCandidateViews();
+            }
             updateNextOptionButtonState();
             updateNavigateButtonState();
         });
@@ -1720,6 +2206,8 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
+            allowManualAnimeRematch = true;
+            updateManualAnimeRematchVisibility();
             chipResultState.setText("暂无地点");
             chipConfidence.setText("可重试");
             tvAnimeTitle.setText(chooseFirstNonBlank(parsedResult.animeTitle, getCurrentCandidateName("作品待确认")));
@@ -2077,6 +2565,10 @@ public class MainActivity extends AppCompatActivity {
             if (!isBlank(parsedResult.summary)) {
                 builder.append("\n\n场景分析：").append(parsedResult.summary);
             }
+            String workIntroText = buildWorkIntroText(bangumiLiteResponse);
+            if (!isBlank(workIntroText)) {
+                builder.append("\n\n作品介绍\n").append(workIntroText);
+            }
             tvResultSummary.setText(builder.toString());
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
@@ -2098,6 +2590,13 @@ public class MainActivity extends AppCompatActivity {
 
             updateCurrentResultSnapshot(
                     animeDisplayName,
+                    locationDisplayName,
+                    builder.toString(),
+                    liteImageUrl
+            );
+            setConfirmedPilgrimageSelection(
+                    animeDisplayName,
+                    locationDisplayName,
                     locationDisplayName,
                     builder.toString(),
                     liteImageUrl
@@ -2736,11 +3235,7 @@ public class MainActivity extends AppCompatActivity {
                     ? View.VISIBLE
                     : View.GONE);
         }
-        if (layoutAnimeRematch != null) {
-            boolean showAnimeRematch = currentIdentifyMode == IdentifyMode.ANIME
-                    && resultMode == ResultMode.OVERSEAS;
-            layoutAnimeRematch.setVisibility(showAnimeRematch ? View.VISIBLE : View.GONE);
-        }
+        updateManualAnimeRematchVisibility();
         updateNavigateButtonState();
         updateNextOptionButtonState();
     }
@@ -2924,9 +3419,11 @@ public class MainActivity extends AppCompatActivity {
         currentVisualKeywords = null;
         currentSpotSearchKeywords = null;
         currentTriedSubjectIds = null;
+        allowManualAnimeRematch = false;
         clearConfirmedPilgrimageSelection();
         clearAnimeCandidateViews();
         clearSpotCandidateViews();
+        updateManualAnimeRematchVisibility();
         updateNextOptionButtonState();
     }
 
@@ -2934,12 +3431,16 @@ public class MainActivity extends AppCompatActivity {
         if (btnNextOption == null) {
             return;
         }
+        boolean canRevealSpotCandidates = currentResultMode == ResultMode.OVERSEAS
+                && hasSpotCandidateOptions
+                && !spotCandidateListExpanded;
         boolean hasNextCandidate = currentResultMode == ResultMode.OVERSEAS
                 && currentCandidateNames != null
                 && currentCandidateIndex >= 0
                 && currentCandidateIndex + 1 < currentCandidateNames.size();
-        btnNextOption.setVisibility(hasNextCandidate ? View.VISIBLE : View.GONE);
-        btnNextOption.setEnabled(hasNextCandidate);
+        boolean canShowNextAction = canRevealSpotCandidates || hasNextCandidate;
+        btnNextOption.setVisibility(canShowNextAction ? View.VISIBLE : View.GONE);
+        btnNextOption.setEnabled(canShowNextAction);
         btnNextOption.setText("🔄 换一个结果");
     }
 
@@ -2958,11 +3459,12 @@ public class MainActivity extends AppCompatActivity {
         if (btnSaveRecord == null) {
             return;
         }
-        boolean hasRecordData = !isBlank(confirmedAnimeName)
+        boolean hasConfirmedRecord = !isBlank(confirmedAnimeName)
                 || !isBlank(confirmedLocationName)
-                || !isBlank(confirmedSpotName)
-                || !isBlank(currentAnimeName)
-                || !isBlank(currentLocation);
+                || !isBlank(confirmedSpotName);
+        boolean hasCurrentDomesticRecord = currentResultMode == ResultMode.DOMESTIC
+                && (!isBlank(currentAnimeName) || !isBlank(currentLocation));
+        boolean hasRecordData = hasConfirmedRecord || hasCurrentDomesticRecord;
         btnSaveRecord.setVisibility(hasRecordData ? View.VISIBLE : View.GONE);
         btnSaveRecord.setEnabled(hasRecordData && !hasSavedCurrentRecord);
         btnSaveRecord.setText(hasSavedCurrentRecord ? "已记录打卡" : "📌 记录打卡");
@@ -3003,6 +3505,9 @@ public class MainActivity extends AppCompatActivity {
                 runSafelyOnUiThread(() -> {
                     hasSavedCurrentRecord = true;
                     updateSaveRecordButtonState();
+                    if (SAVE_ACTION_OPEN_DIARY.equals(saveAction)) {
+                        openPilgrimDiary();
+                    }
                     showToast("打卡成功！已收录至巡礼日记");
                 });
             } catch (Exception e) {
@@ -3287,6 +3792,67 @@ public class MainActivity extends AppCompatActivity {
         if (!isBlank(parsedResult.summary)) {
             lines.add("");
             lines.add("场景解读：" + parsedResult.summary);
+        }
+        String workIntroText = buildWorkIntroText(bangumiLiteResponse);
+        if (!isBlank(workIntroText)) {
+            lines.add("");
+            lines.add("作品介绍");
+            lines.add(workIntroText);
+        }
+        return joinLines(lines);
+    }
+
+    private String appendWorkIntroToDescription(
+            String description,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse
+    ) {
+        String workIntroText = buildWorkIntroText(bangumiLiteResponse);
+        if (isBlank(workIntroText)) {
+            return description;
+        }
+        return joinLines(
+                chooseFirstNonBlank(description, DEFAULT_RESULT_HINT),
+                "",
+                "作品介绍",
+                workIntroText
+        );
+    }
+
+    private String buildWorkIntroText(AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
+        if (bangumiLiteResponse == null) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>();
+        String cnName = chooseFirstNonBlank(
+                bangumiLiteResponse.getSubjectNameCn(),
+                bangumiLiteResponse.getCn()
+        );
+        String originalName = chooseFirstNonBlank(
+                bangumiLiteResponse.getSubjectName(),
+                bangumiLiteResponse.getTitle()
+        );
+        if (!isBlank(cnName)) {
+            lines.add("中文名：" + cnName);
+        }
+        if (!isBlank(originalName) && !originalName.equals(cnName)) {
+            lines.add("原名：" + originalName);
+        }
+        if (!isBlank(bangumiLiteResponse.getSubjectDate())) {
+            lines.add("放送日期：" + bangumiLiteResponse.getSubjectDate());
+        }
+        Integer eps = bangumiLiteResponse.getSubjectEps();
+        if (eps != null && eps > 0) {
+            lines.add("集数：" + eps);
+        }
+        if (!isBlank(bangumiLiteResponse.getSubjectPlatform())) {
+            lines.add("类型：" + bangumiLiteResponse.getSubjectPlatform());
+        }
+        int pointsLength = parseIntSafely(bangumiLiteResponse.getPointsLength());
+        if (pointsLength > 0) {
+            lines.add("Anitabi 收录巡礼点：" + pointsLength);
+        }
+        if (!isBlank(bangumiLiteResponse.getSubjectSummary())) {
+            lines.add("简介：" + bangumiLiteResponse.getSubjectSummary());
         }
         return joinLines(lines);
     }

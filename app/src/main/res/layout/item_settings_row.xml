@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="@color/surface_primary"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/card_stroke"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="14dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSettingTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                tools:text="默认识别模式" />
+
+            <TextView
+                android:id="@+id/tvSettingSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:includeFontPadding="false"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                tools:text="启动后默认使用智能识别" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvSettingValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:includeFontPadding="false"
+            android:textColor="@color/brand_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="智能识别" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

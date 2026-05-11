@@ -3,6 +3,9 @@
     <cache-path
         name="camera_images"
         path="images/" />
+    <cache-path
+        name="diary_exports"
+        path="exports/" />
     <external-files-path
         name="private_camera_images"
         path="Pictures/livecamera_captures/" />

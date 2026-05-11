@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="144dp"
+    android:background="@color/brand_primary"
+    android:gravity="bottom"
+    android:orientation="vertical"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="22dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:text="LiveCamera-LBS"
+        android:textColor="@android:color/white"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:includeFontPadding="false"
+        android:text="选择识别模式和更多工具"
+        android:textColor="@android:color/white"
+        android:textSize="13sp" />
+
+</LinearLayout>

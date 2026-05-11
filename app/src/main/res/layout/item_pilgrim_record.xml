@@ -71,6 +71,27 @@
             android:textColor="@color/text_body"
             android:textSize="14sp"
             tools:text="这里显示本次巡礼结果的摘要说明，包括剧情场景、取景点信息与补充备注。" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDeleteRecord"
+            android:layout_width="wrap_content"
+            android:layout_height="42dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:minHeight="42dp"
+            android:text="删除"
+            android:textAllCaps="false"
+            android:textColor="#B42318"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:backgroundTint="#FFF4F2"
+            app:cornerRadius="16dp"
+            app:icon="@android:drawable/ic_menu_delete"
+            app:iconPadding="6dp"
+            app:iconTint="#B42318"
+            app:rippleColor="#22B42318"
+            app:strokeColor="#FFDAD5"
+            app:strokeWidth="1dp"
+            tools:ignore="HardcodedText" />
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

@@ -14,4 +14,7 @@ public interface PilgrimDao {
 
     @Query("SELECT * FROM pilgrim_records ORDER BY timestamp DESC")
     List<PilgrimRecord> getAllRecordsByNewest();
+
+    @Query("DELETE FROM pilgrim_records WHERE id = :recordId")
+    int deleteById(long recordId);
 }

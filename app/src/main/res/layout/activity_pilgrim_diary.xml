@@ -43,6 +43,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -67,6 +68,23 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExportDiary"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minHeight="40dp"
+            android:text="导出"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            app:backgroundTint="@color/brand_primary"
+            app:cornerRadius="20dp"
+            app:icon="@android:drawable/ic_menu_share"
+            app:iconPadding="4dp"
+            app:iconTint="@android:color/white"
+            app:rippleColor="@color/cta_ripple"
+            tools:ignore="HardcodedText" />
     </LinearLayout>
 
     <ProgressBar

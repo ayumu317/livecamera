@@ -97,6 +97,7 @@ public class DoubaoVisionClient {
         } else {
             prompt = buildAutoPrompt(gpsLatLng);
         }
+        Log.d(TAG, "identifyLocation mode=" + normalizedMode);
         sendRecognitionRequest(base64Image, prompt, callback);
     }
 

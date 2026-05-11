@@ -26,6 +26,7 @@ public class AnitabiApiClient {
 
     private static final String ANITABI_BASE_URL = "https://api.anitabi.cn/";
     private static final String BANGUMI_SEARCH_BASE_URL = "https://api.bgm.tv/search/subject/";
+    private static final String BANGUMI_SUBJECT_BASE_URL = "https://api.bgm.tv/v0/subjects/";
     private static final Pattern LABEL_PREFIX_PATTERN =
             Pattern.compile("^(动漫名称|动画名称|作品名称|番剧名称)\\s*[：:]\\s*");
 
@@ -117,6 +118,43 @@ public class AnitabiApiClient {
                     throw new IOException("Anitabi 未返回地标详情");
                 }
                 return pointDetails;
+            }
+        }, callback);
+    }
+
+    public void getBangumiSubjectInfo(int subjectId, ApiCallback<BangumiSubjectInfo> callback) {
+        if (callback == null) {
+            return;
+        }
+        if (subjectId <= 0) {
+            callback.onFailure(new IllegalArgumentException("subjectId 蹇呴』澶т簬 0"));
+            return;
+        }
+
+        HttpUrl baseUrl = HttpUrl.parse(BANGUMI_SUBJECT_BASE_URL);
+        if (baseUrl == null) {
+            callback.onFailure(new IOException("Bangumi subject 鍦板潃閰嶇疆閿欒"));
+            return;
+        }
+
+        HttpUrl url = baseUrl.newBuilder()
+                .addPathSegment(String.valueOf(subjectId))
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .header("User-Agent", "LiveCamera-LBS/1.0 (Android)")
+                .get()
+                .build();
+
+        executeRequest(request, BangumiSubjectInfo.class, new ResponseParser<BangumiSubjectInfo>() {
+            @Override
+            public BangumiSubjectInfo parse(String responseBody) throws Exception {
+                BangumiSubjectInfo response = gson.fromJson(responseBody, BangumiSubjectInfo.class);
+                if (response == null) {
+                    throw new IOException("Bangumi subject 杩斿洖涓虹┖");
+                }
+                return response;
             }
         }, callback);
     }
@@ -462,6 +500,93 @@ public class AnitabiApiClient {
 
         public void setImagesLength(String imagesLength) {
             this.imagesLength = imagesLength;
+        }
+
+        private String subjectName;
+        private String subjectNameCn;
+        private String subjectSummary;
+        private String subjectDate;
+        private Integer subjectEps;
+        private String subjectPlatform;
+
+        public void applySubjectInfo(BangumiSubjectInfo subjectInfo) {
+            if (subjectInfo == null) {
+                return;
+            }
+            this.subjectName = subjectInfo.getName();
+            this.subjectNameCn = subjectInfo.getNameCn();
+            this.subjectSummary = subjectInfo.getSummary();
+            this.subjectDate = subjectInfo.getDate();
+            this.subjectEps = subjectInfo.getEps();
+            this.subjectPlatform = subjectInfo.getPlatform();
+        }
+
+        public String getSubjectName() {
+            return subjectName;
+        }
+
+        public String getSubjectNameCn() {
+            return subjectNameCn;
+        }
+
+        public String getSubjectSummary() {
+            return subjectSummary;
+        }
+
+        public String getSubjectDate() {
+            return subjectDate;
+        }
+
+        public Integer getSubjectEps() {
+            return subjectEps;
+        }
+
+        public String getSubjectPlatform() {
+            return subjectPlatform;
+        }
+    }
+
+    public static class BangumiSubjectInfo {
+        @SerializedName("name")
+        private String name;
+
+        @SerializedName("name_cn")
+        private String nameCn;
+
+        @SerializedName("summary")
+        private String summary;
+
+        @SerializedName("date")
+        private String date;
+
+        @SerializedName("eps")
+        private Integer eps;
+
+        @SerializedName("platform")
+        private String platform;
+
+        public String getName() {
+            return name;
+        }
+
+        public String getNameCn() {
+            return nameCn;
+        }
+
+        public String getSummary() {
+            return summary;
+        }
+
+        public String getDate() {
+            return date;
+        }
+
+        public Integer getEps() {
+            return eps;
+        }
+
+        public String getPlatform() {
+            return platform;
         }
     }
 

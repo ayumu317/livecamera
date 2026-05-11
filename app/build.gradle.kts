@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.google.code.gson:gson:2.11.0")

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_mode_auto"
+            android:checked="true"
+            android:icon="@android:drawable/ic_menu_search"
+            android:title="智能识别" />
+
+        <item
+            android:id="@+id/nav_mode_anime"
+            android:icon="@android:drawable/ic_menu_compass"
+            android:title="动漫巡礼" />
+
+        <item
+            android:id="@+id/nav_mode_domestic"
+            android:icon="@android:drawable/ic_dialog_map"
+            android:title="国内旅行" />
+    </group>
+
+    <item android:title="更多">
+        <menu>
+            <item
+                android:id="@+id/nav_diary"
+                android:icon="@android:drawable/ic_menu_recent_history"
+                android:title="巡礼日记" />
+
+            <item
+                android:id="@+id/nav_pick_image"
+                android:icon="@android:drawable/ic_menu_gallery"
+                android:title="重新选择图片" />
+
+            <item
+                android:id="@+id/nav_settings"
+                android:icon="@android:drawable/ic_menu_manage"
+                android:title="设置" />
+
+            <item
+                android:id="@+id/nav_about"
+                android:icon="@android:drawable/ic_dialog_info"
+                android:title="关于与说明" />
+        </menu>
+    </item>
+
+</menu>
