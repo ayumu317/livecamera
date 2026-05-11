@@ -1,10 +1,16 @@
 # LiveCamera-LBS
 
-LiveCamera-LBS 是一个 Android 实景巡礼匹配助手。用户可以拍摄或上传现实场景图片，让 AI 判断它更适合动漫圣地巡礼还是国内旅行识别，并结合地点搜索、Anitabi/Bangumi 数据、地图导航和本地巡礼日记完成一次完整的打卡流程。
+**LiveCamera-LBS** 是一个 Android 实景巡礼匹配助手。用户可以拍摄或上传现实场景图片，让 AI 判断它更适合动漫圣地巡礼还是国内旅行识别，并结合地点搜索、Anitabi/Bangumi 数据、地图导航和本地巡礼日记完成一次完整的打卡流程。
 
 当前版本：**v1.5.0**
 
 [下载最新版 APK](https://github.com/ayumu317/livecamera/releases/latest)
+
+## English Overview
+
+**LiveCamera-LBS** is an Android scene-matching assistant for real-world anime pilgrimage and travel discovery. Users can take or upload a photo, let multimodal AI understand the scene, and route the result into either an anime pilgrimage workflow or a domestic travel workflow.
+
+For anime pilgrimage, the app combines the selected work title, the uploaded image, AI visual reasoning, Anitabi/Bangumi data, candidate spot ranking, and local diary check-ins. For domestic travel, it focuses on landmark recognition, location search, travel-oriented descriptions, and map navigation.
 
 ## 核心功能
 
@@ -57,7 +63,7 @@ LiveCamera-LBS 是一个 Android 实景巡礼匹配助手。用户可以拍摄�
 - 动漫巡礼结果补充 Bangumi 作品介绍。
 - 强化保存快照，减少展示结果与保存记录不一致的问题。
 
-## 技术栈
+## Tech Stack / 技术栈
 
 - Android Java
 - Material Design Components
@@ -71,49 +77,3 @@ LiveCamera-LBS 是一个 Android 实景巡礼匹配助手。用户可以拍摄�
 - Anitabi API
 - Bangumi API
 - SerpApi fallback
-
-## 本地构建
-
-```bash
-./gradlew.bat :app:assembleDebug --console=plain
-```
-
-构建完成后，APK 位于：
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-## 配置
-
-敏感配置放在 `local.properties`，不要提交到仓库。
-
-```properties
-ARK_API_KEY=你的火山方舟 API Key
-DOUBAO_MODEL_ID=doubao-seed-2-0-lite-260428
-DOUBAO_RESPONSES_URL=https://ark.cn-beijing.volces.com/api/v3/responses
-TENCENT_MAP_SDK_KEY=你的腾讯地图 SDK Key
-SERPAPI_KEY=你的 SerpApi Key
-```
-
-项目仍保留旧字段兼容：
-
-```properties
-DOUBAO_BASE_URL=
-DOUBAO_API_KEY=
-DOUBAO_MODEL=
-```
-
-## 数据安全
-
-- API Key 不写入源码。
-- `local.properties` 不应提交。
-- 巡礼日记目前保存在本地 Room 数据库。
-- 日记导出文件通过系统分享面板导出，支持 JSON 和 TXT。
-
-## 适合的测试图片
-
-- 动漫巡礼：车站、学校、桥、海边、展馆、神社、商业街、街道路口。
-- 国内旅行：东方明珠、故宫、西湖、城市地标、自然风景。
-
-如果知道作品名，建议在动漫巡礼模式下输入正确作品名重新匹配，系统会结合当前图片再次判断地点线索。
