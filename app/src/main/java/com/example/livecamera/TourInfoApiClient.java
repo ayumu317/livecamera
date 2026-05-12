@@ -30,7 +30,7 @@ import okhttp3.Response;
 public class TourInfoApiClient {
 
     private static final String TAG = "TourInfoApiClient";
-    private static final String DEFAULT_BASE_URL = "http://10.0.2.2:5000";
+    private static final String DEFAULT_BASE_URL = "http://10.18.117.136:5000";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient httpClient;
