@@ -65,6 +65,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -151,6 +152,7 @@ public class MainActivity extends AppCompatActivity {
     private SerpApiClient serpApiClient;
     private TencentLocationHelper tencentLocationHelper;
     private LocationSearchClient locationSearchClient;
+    private TourInfoApiClient tourInfoApiClient;
 
     private Uri selectedImageUri;
     private Uri pendingCameraImageUri;
@@ -182,6 +184,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean allowManualAnimeRematch;
     private int activeSearchGeneration = 0;
     private int pendingLocationPermissionSearchGeneration = -1;
+    private Integer lastManagementRecognitionId;
+    private String lastManagementSupplementText;
     private DeviceLocationSnapshot currentDeviceLocation;
     private LocationNavigationTarget currentNavigationTarget;
     private ResultMode currentResultMode = ResultMode.NONE;
@@ -302,6 +306,7 @@ public class MainActivity extends AppCompatActivity {
         serpApiClient = new SerpApiClient();
         tencentLocationHelper = new TencentLocationHelper(this);
         locationSearchClient = new LocationSearchClient();
+        tourInfoApiClient = new TourInfoApiClient();
         initViewState();
         initListeners();
         restoreState(savedInstanceState);
@@ -344,6 +349,9 @@ public class MainActivity extends AppCompatActivity {
         backgroundExecutor.shutdownNow();
         if (doubaoVisionClient != null) {
             doubaoVisionClient.cancelAll();
+        }
+        if (tourInfoApiClient != null) {
+            tourInfoApiClient.cancelAll();
         }
         if (tencentLocationHelper != null) {
             tencentLocationHelper.stop();
@@ -855,6 +863,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Log.d(DEBUG_TAG, "manualAnimeName = " + animeName);
+        submitManagementCorrection(animeName);
         startAnimeRematchWithWork(animeName, false);
     }
 
@@ -1247,6 +1256,7 @@ public class MainActivity extends AppCompatActivity {
             if (isStaleSearch(searchGeneration)) {
                 return;
             }
+            requestManagementThemeMatch(parsedResult, searchGeneration);
             if (effectiveMode == IdentifyMode.DOMESTIC) {
                 ParsedResult domesticResult = copyParsedResultWithRoute(parsedResult, true);
                 lastParsedResult = domesticResult;
@@ -3369,6 +3379,7 @@ public class MainActivity extends AppCompatActivity {
         currentReferenceUrl = referenceImageUrl;
         hasSavedCurrentRecord = false;
         updateSaveRecordButtonState();
+        appendManagementSupplementToDescription(lastManagementSupplementText);
     }
 
     private void setConfirmedPilgrimageSelection(
@@ -3406,6 +3417,8 @@ public class MainActivity extends AppCompatActivity {
         currentDesc = null;
         currentLocalUri = null;
         currentReferenceUrl = null;
+        lastManagementRecognitionId = null;
+        lastManagementSupplementText = null;
         clearConfirmedPilgrimageSelection();
         hasSavedCurrentRecord = false;
         updateSaveRecordButtonState();
@@ -3498,10 +3511,20 @@ public class MainActivity extends AppCompatActivity {
         record.localImageUri = localImageUriToSave;
         record.referenceImageUrl = referenceImageUrlToSave;
         record.timestamp = System.currentTimeMillis();
+        IdentifyMode recognitionModeToSave = currentIdentifyMode;
+        boolean isDomesticRecord = currentResultMode == ResultMode.DOMESTIC;
 
         backgroundExecutor.execute(() -> {
             try {
                 AppDatabase.getInstance(MainActivity.this).pilgrimDao().insert(record);
+                submitManagementRecognitionRecord(
+                        animeNameToSave,
+                        locationToSave,
+                        descToSave,
+                        localImageUriToSave,
+                        recognitionModeToSave,
+                        isDomesticRecord
+                );
                 runSafelyOnUiThread(() -> {
                     hasSavedCurrentRecord = true;
                     updateSaveRecordButtonState();
@@ -3515,6 +3538,219 @@ public class MainActivity extends AppCompatActivity {
                 runSafelyOnUiThread(() -> showToast("打卡保存失败，请稍后重试"));
             }
         });
+    }
+
+    private void requestManagementThemeMatch(ParsedResult parsedResult, int searchGeneration) {
+        if (tourInfoApiClient == null || parsedResult == null) {
+            return;
+        }
+        String keyword = chooseFirstNonBlank(
+                parsedResult.locationName,
+                parsedResult.animeTitle,
+                parsedResult.animeNames != null && !parsedResult.animeNames.isEmpty()
+                        ? parsedResult.animeNames.get(0)
+                        : null,
+                currentLocation
+        );
+        if (isBlank(keyword)) {
+            return;
+        }
+        tourInfoApiClient.matchTheme(keyword, new TourInfoApiClient.ApiCallback<List<TourThemeMatchResult>>() {
+            @Override
+            public void onSuccess(List<TourThemeMatchResult> data) {
+                if (isStaleSearch(searchGeneration) || data == null || data.isEmpty()) {
+                    return;
+                }
+                TourThemeMatchResult theme = data.get(0);
+                String supplement = buildManagementThemeSupplement(theme);
+                if (isBlank(supplement)) {
+                    return;
+                }
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    setManagementSupplement(supplement);
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management theme match skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void submitManagementRecognitionRecord(
+            String animeName,
+            String locationName,
+            String description,
+            String imageUri,
+            IdentifyMode recognitionMode,
+            boolean isDomesticRecord
+    ) {
+        if (tourInfoApiClient == null) {
+            return;
+        }
+        TourInfoApiClient.RecognitionRecordPayload payload = new TourInfoApiClient.RecognitionRecordPayload()
+                .put("app_user_id", "android-local")
+                .put("image_uri", imageUri)
+                .put("recognition_mode", recognitionMode != null
+                        ? recognitionMode.name().toLowerCase(Locale.ROOT)
+                        : "auto")
+                .put("ai_model", chooseFirstNonBlank(BuildConfig.DOUBAO_MODEL_ID, BuildConfig.DOUBAO_MODEL, "doubao"))
+                .put("recognized_theme", chooseFirstNonBlank(
+                        animeName,
+                        lastParsedResult != null ? lastParsedResult.animeTitle : null
+                ))
+                .put("recognized_location", chooseFirstNonBlank(
+                        locationName,
+                        lastParsedResult != null ? lastParsedResult.locationName : null
+                ))
+                .put("is_domestic", isDomesticRecord)
+                .put("confidence", 0)
+                .put("description", description)
+                .put("user_confirmed", true)
+                .put("status", "saved");
+        tourInfoApiClient.createRecognitionRecord(payload, new TourInfoApiClient.ApiCallback<TourRecognitionRecordResult>() {
+            @Override
+            public void onSuccess(TourRecognitionRecordResult data) {
+                if (data == null || data.getId() <= 0) {
+                    return;
+                }
+                lastManagementRecognitionId = data.getId();
+                requestManagementRecognitionCost(data.getId());
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management recognition record skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void submitManagementCorrection(String correctedAnimeName) {
+        if (tourInfoApiClient == null || isBlank(correctedAnimeName)) {
+            return;
+        }
+        TourInfoApiClient.CorrectionPayload payload = new TourInfoApiClient.CorrectionPayload()
+                .put("recognition_id", lastManagementRecognitionId)
+                .put("app_user_id", "android-local")
+                .put("original_theme", chooseFirstNonBlank(
+                        confirmedAnimeName,
+                        currentAnimeName,
+                        lastParsedResult != null ? lastParsedResult.animeTitle : null
+                ))
+                .put("corrected_theme", correctedAnimeName)
+                .put("original_location", chooseFirstNonBlank(
+                        confirmedLocationName,
+                        confirmedSpotName,
+                        currentLocation,
+                        lastParsedResult != null ? lastParsedResult.locationName : null
+                ))
+                .put("corrected_location", currentLocation)
+                .put("correction_reason", "用户手动输入作品名后重新匹配");
+        tourInfoApiClient.submitCorrection(payload, new TourInfoApiClient.ApiCallback<Void>() {
+            @Override
+            public void onSuccess(Void data) {
+                Log.d(DEBUG_TAG, "management correction submitted");
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management correction skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void requestManagementRecognitionCost(int recognitionId) {
+        if (tourInfoApiClient == null) {
+            return;
+        }
+        tourInfoApiClient.getRecognitionCost(recognitionId, new TourInfoApiClient.ApiCallback<TourRecognitionCostResult>() {
+            @Override
+            public void onSuccess(TourRecognitionCostResult data) {
+                if (data == null) {
+                    return;
+                }
+                String costText = buildManagementCostSupplement(data);
+                runSafelyOnUiThread(() -> addManagementSupplementSection(costText));
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management cost skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private String buildManagementThemeSupplement(TourThemeMatchResult theme) {
+        if (theme == null) {
+            return "";
+        }
+        return joinLines(
+                "后台辅助信息",
+                "匹配主题：" + chooseFirstNonBlank(theme.getThemeName(), "未命名主题"),
+                "主题类型：" + chooseFirstNonBlank(theme.getThemeType(), "未配置"),
+                isBlank(theme.getDescription()) ? "" : "作品介绍：" + theme.getDescription()
+        );
+    }
+
+    private String buildManagementCostSupplement(TourRecognitionCostResult cost) {
+        if (cost == null) {
+            return "";
+        }
+        String currency = chooseFirstNonBlank(cost.getCurrency(), "CNY");
+        return joinLines(
+                "本次估算成本",
+                "AI 模型：" + formatCostAmount(cost.getAiModelCost()) + " " + currency,
+                "地图服务：" + formatCostAmount(cost.getMapServiceCost()) + " " + currency,
+                "其他接口：" + formatCostAmount(cost.getOtherApiCost()) + " " + currency,
+                "合计：" + formatCostAmount(cost.getTotalCost()) + " " + currency
+        );
+    }
+
+    private String formatCostAmount(double amount) {
+        return String.format(Locale.CHINA, "%.4f", amount);
+    }
+
+    private void setManagementSupplement(String supplementText) {
+        lastManagementSupplementText = supplementText;
+        appendManagementSupplementToDescription(lastManagementSupplementText);
+    }
+
+    private void addManagementSupplementSection(String sectionText) {
+        if (isBlank(sectionText)) {
+            return;
+        }
+        if (isBlank(lastManagementSupplementText)) {
+            lastManagementSupplementText = sectionText;
+        } else if (!lastManagementSupplementText.contains(sectionText)) {
+            lastManagementSupplementText = joinLines(lastManagementSupplementText, "", sectionText);
+        }
+        appendManagementSupplementToDescription(lastManagementSupplementText);
+    }
+
+    private void appendManagementSupplementToDescription(@Nullable String supplementText) {
+        if (isBlank(supplementText)) {
+            return;
+        }
+        TextView target = currentResultMode == ResultMode.DOMESTIC && tvDomesticIntro != null
+                ? tvDomesticIntro
+                : tvDesc;
+        if (target == null) {
+            return;
+        }
+        String currentText = target.getText() != null ? target.getText().toString() : "";
+        int markerIndex = currentText.indexOf("后台辅助信息");
+        if (markerIndex < 0) {
+            markerIndex = currentText.indexOf("本次估算成本");
+        }
+        String baseText = markerIndex >= 0
+                ? currentText.substring(0, markerIndex).trim()
+                : currentText.trim();
+        target.setVisibility(View.VISIBLE);
+        target.setText(joinLines(baseText, "", supplementText));
     }
 
     private String extractLabeledValue(String text, String... labels) {
