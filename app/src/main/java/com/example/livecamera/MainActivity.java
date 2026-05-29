@@ -197,6 +197,7 @@ public class MainActivity extends AppCompatActivity {
     private int pendingLocationPermissionSearchGeneration = -1;
     private Integer lastManagementRecognitionId;
     private String lastManagementSupplementText;
+    private DoubaoVisionClient.UsageStats lastDoubaoUsageStats;
     private DeviceLocationSnapshot currentDeviceLocation;
     private LocationNavigationTarget currentNavigationTarget;
     private ResultMode currentResultMode = ResultMode.NONE;
@@ -929,6 +930,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(DEBUG_TAG, "start AI rematch with image and work = " + animeName);
         showProcessingPlaceholder();
         updateLoadingState(true);
+        lastDoubaoUsageStats = null;
         clearCurrentCandidateState();
         clearLocationRoutingState();
         int searchGeneration = beginNewSearchGeneration();
@@ -944,6 +946,12 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             doubaoVisionClient.identifyAnimeWithUserWork(base64Image, gpsLatLng, animeName, new DoubaoVisionClient.Callback() {
+                @Override
+                public void onSuccess(DoubaoVisionClient.RecognitionResponse response) {
+                    cacheDoubaoUsage(response);
+                    handleAnimeRematchSuccess(response == null ? "" : response.businessJson, animeName, searchGeneration);
+                }
+
                 @Override
                 public void onSuccess(String responseBody) {
                     handleAnimeRematchSuccess(responseBody, animeName, searchGeneration);
@@ -1294,6 +1302,7 @@ public class MainActivity extends AppCompatActivity {
         showProcessingPlaceholder();
         updateLoadingState(true);
         lastParsedResult = null;
+        lastDoubaoUsageStats = null;
         clearCurrentResultSnapshot();
         clearCurrentCandidateState();
         clearLocationRoutingState();
@@ -1319,6 +1328,12 @@ public class MainActivity extends AppCompatActivity {
                     gpsLatLng,
                     toDoubaoMode(identifyModeForRequest),
                     new DoubaoVisionClient.Callback() {
+                @Override
+                public void onSuccess(DoubaoVisionClient.RecognitionResponse response) {
+                    cacheDoubaoUsage(response);
+                    handleDoubaoSuccess(response == null ? "" : response.businessJson, searchGeneration, identifyModeForRequest);
+                }
+
                 @Override
                 public void onSuccess(String responseBody) {
                     handleDoubaoSuccess(responseBody, searchGeneration, identifyModeForRequest);
@@ -4109,7 +4124,7 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(keyword)) {
             return;
         }
-        tourInfoApiClient.getRecognitionAssist(keyword, getCurrentManagementAppUserId(), new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
+        tourInfoApiClient.getRecognitionAssist(keyword, getCurrentManagementAppUserId(), getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
             @Override
             public void onSuccess(TourRecognitionAssistResponse data) {
                 if (isStaleSearch(searchGeneration) || data == null || data.getItems() == null || data.getItems().isEmpty()) {
@@ -4166,7 +4181,8 @@ public class MainActivity extends AppCompatActivity {
                 .put("description", description)
                 .put("user_confirmed", true)
                 .put("status", "saved");
-        tourInfoApiClient.createRecognitionRecord(payload, new TourInfoApiClient.ApiCallback<TourRecognitionRecordResult>() {
+        addDoubaoUsagePayload(payload);
+        tourInfoApiClient.createRecognitionRecord(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionRecordResult>() {
             @Override
             public void onSuccess(TourRecognitionRecordResult data) {
                 if (data == null || data.getId() <= 0) {
@@ -4204,7 +4220,7 @@ public class MainActivity extends AppCompatActivity {
                 ))
                 .put("corrected_location", currentLocation)
                 .put("correction_reason", "用户手动输入作品名后重新匹配");
-        tourInfoApiClient.submitCorrection(payload, new TourInfoApiClient.ApiCallback<Void>() {
+        tourInfoApiClient.submitCorrection(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<Void>() {
             @Override
             public void onSuccess(Void data) {
                 Log.d(DEBUG_TAG, "management correction submitted");
@@ -4221,7 +4237,7 @@ public class MainActivity extends AppCompatActivity {
         if (tourInfoApiClient == null) {
             return;
         }
-        tourInfoApiClient.getRecognitionCost(recognitionId, new TourInfoApiClient.ApiCallback<TourRecognitionCostResult>() {
+        tourInfoApiClient.getRecognitionCost(recognitionId, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionCostResult>() {
             @Override
             public void onSuccess(TourRecognitionCostResult data) {
                 if (data == null) {
@@ -4243,6 +4259,29 @@ public class MainActivity extends AppCompatActivity {
             return TourAuthSession.LOCAL_APP_USER_ID;
         }
         return chooseFirstNonBlank(tourAuthSession.getCurrentAppUserId(), TourAuthSession.LOCAL_APP_USER_ID);
+    }
+
+    private String getCurrentManagementAuthToken() {
+        if (tourAuthSession == null || !tourAuthSession.isLoggedIn()) {
+            return "";
+        }
+        return chooseFirstNonBlank(tourAuthSession.getToken(), "");
+    }
+
+    private void cacheDoubaoUsage(@Nullable DoubaoVisionClient.RecognitionResponse response) {
+        lastDoubaoUsageStats = response == null ? null : response.usageStats;
+    }
+
+    private void addDoubaoUsagePayload(TourInfoApiClient.RecognitionRecordPayload payload) {
+        if (payload == null || lastDoubaoUsageStats == null || !lastDoubaoUsageStats.hasUsage()) {
+            return;
+        }
+        payload.put("service_provider", "doubao")
+                .put("service_type", "vision_recognition")
+                .put("endpoint", BuildConfig.DOUBAO_RESPONSES_URL)
+                .put("input_tokens", lastDoubaoUsageStats.inputTokens)
+                .put("output_tokens", lastDoubaoUsageStats.outputTokens)
+                .put("request_count", 1);
     }
 
     private String buildManagementThemeSupplement(TourThemeMatchResult theme) {

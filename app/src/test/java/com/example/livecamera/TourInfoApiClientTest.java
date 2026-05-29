@@ -80,6 +80,20 @@ public class TourInfoApiClientTest {
     }
 
     @Test
+    public void recognitionAssistCanSendAuthorizationHeader() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"keyword\":\"Akihabara\",\"app_user_id\":\"traveler\",\"strategy\":\"rule_based_history_assist\",\"items\":[]}}"));
+
+        this.<TourRecognitionAssistResponse>awaitSuccess(
+                callback -> client.getRecognitionAssist("Akihabara", "traveler", "token-123", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("/api/app/recognition/assist?keyword=Akihabara&app_user_id=traveler", request.getPath());
+        assertEquals("Bearer token-123", request.getHeader("Authorization"));
+    }
+
+    @Test
     public void loginPostsCredentialsAndParsesAuthResult() throws Exception {
         server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"登录成功\",\"data\":{\"token\":\"token-123\",\"expires_in\":28800,\"expires_at\":\"2026-05-29T12:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"旅行者\"}}}"));
 
@@ -159,6 +173,28 @@ public class TourInfoApiClientTest {
         assertTrue(request.getBody().readUtf8().contains("\"app_user_id\":\"demo_user\""));
         assertEquals(12, result.data.getId());
         assertEquals("confirmed", result.data.getStatus());
+    }
+
+    @Test
+    public void createRecognitionRecordCanSendAuthorizationHeaderAndUsageFields() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"created\",\"data\":{\"id\":13,\"app_user_id\":\"traveler\",\"recognized_theme\":\"Tokyo\",\"recognized_location\":\"Akihabara\",\"status\":\"saved\"}}"));
+        TourInfoApiClient.RecognitionRecordPayload payload = new TourInfoApiClient.RecognitionRecordPayload()
+                .put("app_user_id", "traveler")
+                .put("recognized_location", "Akihabara")
+                .put("input_tokens", 1200)
+                .put("output_tokens", 300)
+                .put("request_count", 1);
+
+        this.<TourRecognitionRecordResult>awaitSuccess(
+                callback -> client.createRecognitionRecord(payload, "token-456", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("Bearer token-456", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"input_tokens\":1200"));
+        assertTrue(body.contains("\"output_tokens\":300"));
     }
 
     @Test

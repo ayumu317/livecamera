@@ -88,6 +88,7 @@ dependencies {
     annotationProcessor("androidx.room:room-compiler:2.6.1")
     testImplementation(libs.junit)
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }

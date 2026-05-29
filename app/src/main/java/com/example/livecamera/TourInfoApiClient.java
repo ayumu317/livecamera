@@ -129,6 +129,14 @@ public class TourInfoApiClient {
     }
 
     public void matchTheme(@Nullable String keyword, @Nullable ApiCallback<List<TourThemeMatchResult>> callback) {
+        matchTheme(keyword, null, callback);
+    }
+
+    public void matchTheme(
+            @Nullable String keyword,
+            @Nullable String token,
+            @Nullable ApiCallback<List<TourThemeMatchResult>> callback
+    ) {
         if (isBlank(keyword)) {
             notifyFailure(callback, new IllegalArgumentException("keyword is empty"));
             return;
@@ -138,12 +146,21 @@ public class TourInfoApiClient {
                 .addQueryParameter("keyword", keyword.trim())
                 .build();
         Type type = new TypeToken<List<TourThemeMatchResult>>() { }.getType();
-        executeGet(url, type, callback);
+        executeGet(url, type, token, callback);
     }
 
     public void getRecognitionAssist(
             @Nullable String keyword,
             @Nullable String appUserId,
+            @Nullable ApiCallback<TourRecognitionAssistResponse> callback
+    ) {
+        getRecognitionAssist(keyword, appUserId, null, callback);
+    }
+
+    public void getRecognitionAssist(
+            @Nullable String keyword,
+            @Nullable String appUserId,
+            @Nullable String token,
             @Nullable ApiCallback<TourRecognitionAssistResponse> callback
     ) {
         if (isBlank(keyword)) {
@@ -156,28 +173,52 @@ public class TourInfoApiClient {
         if (!isBlank(appUserId)) {
             builder.addQueryParameter("app_user_id", appUserId.trim());
         }
-        executeGet(builder.build(), TourRecognitionAssistResponse.class, callback);
+        executeGet(builder.build(), TourRecognitionAssistResponse.class, token, callback);
     }
 
     public void createRecognitionRecord(
             @NonNull RecognitionRecordPayload payload,
             @Nullable ApiCallback<TourRecognitionRecordResult> callback
     ) {
+        createRecognitionRecord(payload, null, callback);
+    }
+
+    public void createRecognitionRecord(
+            @NonNull RecognitionRecordPayload payload,
+            @Nullable String token,
+            @Nullable ApiCallback<TourRecognitionRecordResult> callback
+    ) {
         HttpUrl url = requireBaseUrl()
                 .addPathSegments("api/app/recognition/record")
                 .build();
         Type type = TourRecognitionRecordResult.class;
-        executePost(url, payload.values, type, callback);
+        executePost(url, payload.values, type, token, callback);
     }
 
     public void submitCorrection(@NonNull CorrectionPayload payload, @Nullable ApiCallback<Void> callback) {
+        submitCorrection(payload, null, callback);
+    }
+
+    public void submitCorrection(
+            @NonNull CorrectionPayload payload,
+            @Nullable String token,
+            @Nullable ApiCallback<Void> callback
+    ) {
         HttpUrl url = requireBaseUrl()
                 .addPathSegments("api/app/correction/submit")
                 .build();
-        executePost(url, payload.values, Void.class, callback);
+        executePost(url, payload.values, Void.class, token, callback);
     }
 
     public void getRecognitionCost(int recognitionId, @Nullable ApiCallback<TourRecognitionCostResult> callback) {
+        getRecognitionCost(recognitionId, null, callback);
+    }
+
+    public void getRecognitionCost(
+            int recognitionId,
+            @Nullable String token,
+            @Nullable ApiCallback<TourRecognitionCostResult> callback
+    ) {
         if (recognitionId <= 0) {
             notifyFailure(callback, new IllegalArgumentException("recognitionId is invalid"));
             return;
@@ -185,7 +226,7 @@ public class TourInfoApiClient {
         HttpUrl url = requireBaseUrl()
                 .addPathSegments("api/app/recognition/cost/" + recognitionId)
                 .build();
-        executeGet(url, TourRecognitionCostResult.class, callback);
+        executeGet(url, TourRecognitionCostResult.class, token, callback);
     }
 
     public void cancelAll() {

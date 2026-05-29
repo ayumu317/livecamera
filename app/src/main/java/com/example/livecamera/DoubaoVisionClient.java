@@ -49,7 +49,35 @@ public class DoubaoVisionClient {
     public interface Callback {
         void onSuccess(String responseBody);
 
+        default void onSuccess(RecognitionResponse response) {
+            onSuccess(response == null ? "" : response.businessJson);
+        }
+
         void onFailure(Exception e);
+    }
+
+    public static final class RecognitionResponse {
+        public final String businessJson;
+        public final UsageStats usageStats;
+
+        RecognitionResponse(String businessJson, @Nullable UsageStats usageStats) {
+            this.businessJson = businessJson;
+            this.usageStats = usageStats;
+        }
+    }
+
+    public static final class UsageStats {
+        public final int inputTokens;
+        public final int outputTokens;
+
+        UsageStats(int inputTokens, int outputTokens) {
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+        }
+
+        public boolean hasUsage() {
+            return inputTokens > 0 || outputTokens > 0;
+        }
     }
 
     public static final class RecognitionResult {
@@ -197,7 +225,7 @@ public class DoubaoVisionClient {
                         callback.onFailure(new IllegalStateException("豆包响应中没有可解析的 JSON"));
                         return;
                     }
-                    callback.onSuccess(cleanedJson);
+                    callback.onSuccess(new RecognitionResponse(cleanedJson, extractUsageStats(root)));
                 } catch (Exception e) {
                     callback.onFailure(e);
                 }
@@ -346,6 +374,37 @@ public class DoubaoVisionClient {
         }
 
         return extractTextFromAny(root);
+    }
+
+    static UsageStats extractUsageStats(JSONObject root) {
+        if (root == null) {
+            return null;
+        }
+        JSONObject usage = root.optJSONObject("usage");
+        if (usage == null) {
+            return null;
+        }
+        int inputTokens = firstPositiveInt(
+                usage.optInt("input_tokens", 0),
+                usage.optInt("prompt_tokens", 0)
+        );
+        int outputTokens = firstPositiveInt(
+                usage.optInt("output_tokens", 0),
+                usage.optInt("completion_tokens", 0)
+        );
+        UsageStats result = new UsageStats(inputTokens, outputTokens);
+        return result.hasUsage() ? result : null;
+    }
+
+    private static int firstPositiveInt(int... values) {
+        if (values != null) {
+            for (int value : values) {
+                if (value > 0) {
+                    return value;
+                }
+            }
+        }
+        return 0;
     }
 
     private String extractTextFromAny(Object value) {
