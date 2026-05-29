@@ -501,6 +501,8 @@ public class MainActivity extends AppCompatActivity {
                     galleryLauncher.launch("image/*");
                 } else if (itemId == R.id.nav_settings) {
                     openSettingsPage();
+                } else if (itemId == R.id.nav_account) {
+                    openAccountPage();
                 } else if (itemId == R.id.nav_about) {
                     showToast("默认智能识别；可从侧边栏切换动漫巡礼或国内旅行。");
                 }
@@ -648,6 +650,10 @@ public class MainActivity extends AppCompatActivity {
     private void openSettingsPage() {
         refreshSettingsOnResume = true;
         startActivity(new Intent(this, SettingsActivity.class));
+    }
+
+    private void openAccountPage() {
+        startActivity(new Intent(this, AccountActivity.class));
     }
 
     private void openSettingsMenu() {
