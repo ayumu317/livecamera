@@ -88,6 +88,24 @@ public class TourInfoApiClient {
         executeGet(url, type, callback);
     }
 
+    public void getRecognitionAssist(
+            @Nullable String keyword,
+            @Nullable String appUserId,
+            @Nullable ApiCallback<TourRecognitionAssistResponse> callback
+    ) {
+        if (isBlank(keyword)) {
+            notifyFailure(callback, new IllegalArgumentException("keyword is empty"));
+            return;
+        }
+        HttpUrl.Builder builder = requireBaseUrl()
+                .addPathSegments("api/app/recognition/assist")
+                .addQueryParameter("keyword", keyword.trim());
+        if (!isBlank(appUserId)) {
+            builder.addQueryParameter("app_user_id", appUserId.trim());
+        }
+        executeGet(builder.build(), TourRecognitionAssistResponse.class, callback);
+    }
+
     public void createRecognitionRecord(
             @NonNull RecognitionRecordPayload payload,
             @Nullable ApiCallback<TourRecognitionRecordResult> callback

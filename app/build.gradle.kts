@@ -65,6 +65,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -82,6 +86,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
     testImplementation(libs.junit)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }

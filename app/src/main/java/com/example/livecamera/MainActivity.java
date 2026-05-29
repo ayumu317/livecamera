@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -37,6 +38,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
+import androidx.core.widget.NestedScrollView;
 import androidx.core.view.GravityCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -117,8 +119,10 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnNextOption;
     private MaterialButton btnNavigateSpot;
     private MaterialCardView cardResult;
+    private NestedScrollView scrollContent;
     private LinearLayout layoutOverseasContent;
     private LinearLayout layoutDomesticContent;
+    private LinearLayout layoutNextStepHint;
     private LinearLayout layoutAnimeRematch;
     private LinearLayout layoutAnimeCandidateList;
     private LinearLayout layoutSpotCandidateList;
@@ -129,6 +133,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvCommentaryLabel;
     private TextView tvDomesticAddress;
     private TextView tvDomesticIntro;
+    private TextView tvOverseasBadge;
+    private TextView tvDomesticBadge;
+    private TextView tvNextStepHint;
     private Chip chipResultState;
     private Chip chipConfidence;
     private ProgressBar pbLoading;
@@ -182,6 +189,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean hasSpotCandidateOptions;
     private boolean spotCandidateListExpanded;
     private boolean allowManualAnimeRematch;
+    private int currentSpotCandidateCount;
     private int activeSearchGeneration = 0;
     private int pendingLocationPermissionSearchGeneration = -1;
     private Integer lastManagementRecognitionId;
@@ -211,6 +219,8 @@ public class MainActivity extends AppCompatActivity {
         final boolean isDomestic;
         final List<String> visualKeywords;
         final List<String> spotSearchKeywords;
+        final double confidence;
+        final String reason;
 
         ParsedResult(
                 List<String> animeNames,
@@ -219,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
                 String summary,
                 boolean isDomestic
         ) {
-            this(animeNames, animeTitle, locationName, summary, isDomestic, null, null);
+            this(animeNames, animeTitle, locationName, summary, isDomestic, null, null, -1, "");
         }
 
         ParsedResult(
@@ -231,6 +241,20 @@ public class MainActivity extends AppCompatActivity {
                 List<String> visualKeywords,
                 List<String> spotSearchKeywords
         ) {
+            this(animeNames, animeTitle, locationName, summary, isDomestic, visualKeywords, spotSearchKeywords, -1, "");
+        }
+
+        ParsedResult(
+                List<String> animeNames,
+                String animeTitle,
+                String locationName,
+                String summary,
+                boolean isDomestic,
+                List<String> visualKeywords,
+                List<String> spotSearchKeywords,
+                double confidence,
+                String reason
+        ) {
             this.animeNames = animeNames != null ? new ArrayList<>(animeNames) : new ArrayList<>();
             this.animeTitle = animeTitle;
             this.locationName = locationName;
@@ -238,6 +262,8 @@ public class MainActivity extends AppCompatActivity {
             this.isDomestic = isDomestic;
             this.visualKeywords = visualKeywords != null ? new ArrayList<>(visualKeywords) : new ArrayList<>();
             this.spotSearchKeywords = spotSearchKeywords != null ? new ArrayList<>(spotSearchKeywords) : new ArrayList<>();
+            this.confidence = confidence;
+            this.reason = reason;
         }
     }
 
@@ -369,6 +395,7 @@ public class MainActivity extends AppCompatActivity {
     private void bindViews() {
         drawerLayout = findOptionalViewByName("drawerLayout");
         navigationView = findOptionalViewByName("navigationView");
+        scrollContent = findOptionalViewByName("scrollContent");
         ivScenePreview = findViewById(R.id.iv_preview);
         ivResultReference = findViewById(R.id.iv_result_reference);
         tvPreviewPlaceholderHint = findViewById(R.id.tvPreviewPlaceholderHint);
@@ -389,6 +416,7 @@ public class MainActivity extends AppCompatActivity {
         cardResult = findViewById(R.id.cardResult);
         layoutOverseasContent = findOptionalViewByName("layoutOverseasContent");
         layoutDomesticContent = findOptionalViewByName("layoutDomesticContent");
+        layoutNextStepHint = findOptionalViewByName("layoutNextStepHint");
         layoutAnimeRematch = findViewById(R.id.layoutAnimeRematch);
         layoutAnimeCandidateList = findViewById(R.id.layoutAnimeCandidateList);
         layoutSpotCandidateList = findViewById(R.id.layoutSpotCandidateList);
@@ -399,6 +427,9 @@ public class MainActivity extends AppCompatActivity {
         tvCommentaryLabel = findOptionalViewByName("tvCommentaryLabel");
         tvDomesticAddress = findOptionalViewByName("tvDomesticAddress");
         tvDomesticIntro = findOptionalViewByName("tvDomesticIntro");
+        tvOverseasBadge = findOptionalViewByName("tvOverseasBadge");
+        tvDomesticBadge = findOptionalViewByName("tvDomesticBadge");
+        tvNextStepHint = findOptionalViewByName("tvNextStepHint");
         chipResultState = findViewById(R.id.chipResultState);
         chipConfidence = findViewById(R.id.chipConfidence);
         pbLoading = findOptionalViewByName("pb_loading");
@@ -492,10 +523,15 @@ public class MainActivity extends AppCompatActivity {
         }
         if (btnNextOption != null) {
             btnNextOption.setOnClickListener(v -> {
-                if (hasSpotCandidateOptions && !spotCandidateListExpanded) {
-                    setSpotCandidateListExpanded(true);
+                if (hasSpotCandidateOptions) {
+                    setSpotCandidateListExpanded(!spotCandidateListExpanded);
                     allowManualAnimeRematch = false;
                     updateManualAnimeRematchVisibility();
+                    if (spotCandidateListExpanded) {
+                        scrollToView(layoutSpotCandidateList);
+                    } else {
+                        scrollToView(cardResult);
+                    }
                     return;
                 }
                 if (currentCandidateNames != null && currentCandidateIndex + 1 < currentCandidateNames.size()) {
@@ -785,6 +821,7 @@ public class MainActivity extends AppCompatActivity {
             navigationView.setItemIconTintList(primaryTint);
             navigationView.setItemTextColor(primaryTint);
         }
+        applyResultModeVisualStyle(currentResultMode);
     }
 
     private IdentifyMode readIdentifyModeSetting(@Nullable String value) {
@@ -965,7 +1002,9 @@ public class MainActivity extends AppCompatActivity {
                 parsedResult != null ? parsedResult.summary : "",
                 false,
                 parsedResult != null ? parsedResult.visualKeywords : null,
-                parsedResult != null ? parsedResult.spotSearchKeywords : null
+                parsedResult != null ? parsedResult.spotSearchKeywords : null,
+                parsedResult != null ? parsedResult.confidence : -1,
+                parsedResult != null ? parsedResult.reason : ""
         );
     }
 
@@ -1257,6 +1296,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             requestManagementThemeMatch(parsedResult, searchGeneration);
+            requestManagementRecognitionAssist(parsedResult, searchGeneration);
             if (effectiveMode == IdentifyMode.DOMESTIC) {
                 ParsedResult domesticResult = copyParsedResultWithRoute(parsedResult, true);
                 lastParsedResult = domesticResult;
@@ -1326,7 +1366,9 @@ public class MainActivity extends AppCompatActivity {
                 parsedResult != null ? parsedResult.summary : "",
                 isDomestic,
                 parsedResult != null ? parsedResult.visualKeywords : null,
-                parsedResult != null ? parsedResult.spotSearchKeywords : null
+                parsedResult != null ? parsedResult.spotSearchKeywords : null,
+                parsedResult != null ? parsedResult.confidence : -1,
+                parsedResult != null ? parsedResult.reason : ""
         );
     }
 
@@ -1515,8 +1557,8 @@ public class MainActivity extends AppCompatActivity {
             allowManualAnimeRematch = true;
             updateManualAnimeRematchVisibility();
             cardResult.setVisibility(View.VISIBLE);
-            chipResultState.setText("作品待确认");
-            chipConfidence.setText("动漫巡礼模式");
+            chipResultState.setText("需要补充作品名");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, "动漫巡礼模式"));
             tvAnimeTitle.setText("未识别到明确作品");
             String locationDisplayName = chooseFirstNonBlank(parsedResult.locationName, "地点待确认");
             tvLocationName.setVisibility(View.VISIBLE);
@@ -1528,9 +1570,11 @@ public class MainActivity extends AppCompatActivity {
                 String routeHint = modelSuggestedDomestic
                         ? "模型倾向国内景点；当前保持动漫巡礼模式，如需景点识别请切换国内旅行模式。"
                         : "当前保留为动漫巡礼线索，不自动切换到国内旅行。";
-                tvDesc.setText(isBlank(parsedResult.summary)
-                        ? routeHint
-                        : parsedResult.summary + "\n\n" + routeHint);
+                tvDesc.setText(joinLines(
+                        isBlank(parsedResult.summary) ? routeHint : parsedResult.summary,
+                        routeHint,
+                        buildResultGuidance(parsedResult, false, false)
+                ));
             }
             tvReferenceLabel.setVisibility(View.GONE);
             if (ivResultReference != null) {
@@ -1555,7 +1599,7 @@ public class MainActivity extends AppCompatActivity {
             allowManualAnimeRematch = true;
             updateManualAnimeRematchVisibility();
             chipResultState.setText("作品候选");
-            chipConfidence.setText("等待确认");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, "等待确认"));
             tvAnimeTitle.setText("请选择作品后重新匹配图片");
             tvLocationName.setVisibility(View.VISIBLE);
             tvLocationName.setText(chooseFirstNonBlank(parsedResult.locationName, "地点线索待确认"));
@@ -1565,7 +1609,10 @@ public class MainActivity extends AppCompatActivity {
             ));
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
-                tvDesc.setText("选择作品后会重新调用 AI，不会只按作品名直接固定地点。");
+                tvDesc.setText(joinLines(
+                        "选择作品后会重新调用 AI，不会只按作品名直接固定地点。",
+                        buildResultGuidance(parsedResult, false, false)
+                ));
             }
             tvReferenceLabel.setVisibility(View.GONE);
             if (ivResultReference != null) {
@@ -1623,6 +1670,8 @@ public class MainActivity extends AppCompatActivity {
         }
         hasSpotCandidateOptions = false;
         spotCandidateListExpanded = false;
+        currentSpotCandidateCount = 0;
+        updateNextStepHint();
     }
 
     private void setSpotCandidateListExpanded(boolean expanded) {
@@ -1632,6 +1681,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Log.d(DEBUG_TAG, "spotCandidateListExpanded=" + spotCandidateListExpanded);
         updateNextOptionButtonState();
+        updateNextStepHint();
     }
 
     private void updateManualAnimeRematchVisibility() {
@@ -1653,7 +1703,7 @@ public class MainActivity extends AppCompatActivity {
             switchResultMode(ResultMode.DOMESTIC);
             cardResult.setVisibility(View.VISIBLE);
             chipResultState.setText("风景旅行");
-            chipConfidence.setText(fromGateway ? "腾讯双引擎" : "AI 景点识别");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, fromGateway ? "腾讯双引擎" : "AI 景点识别"));
             String locationDisplayName = getPreferredLocationDisplayName(parsedResult.locationName);
             tvAnimeTitle.setText(locationDisplayName);
             tvLocationName.setVisibility(View.GONE);
@@ -2162,11 +2212,12 @@ public class MainActivity extends AppCompatActivity {
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
             hasSpotCandidateOptions = sortedCandidates != null && !sortedCandidates.isEmpty();
+            currentSpotCandidateCount = hasSpotCandidateOptions ? sortedCandidates.size() : 0;
             spotCandidateListExpanded = false;
-            allowManualAnimeRematch = !hasSpotCandidateOptions;
+            allowManualAnimeRematch = !hasSpotCandidateOptions || isLowConfidenceResult(parsedResult);
             updateManualAnimeRematchVisibility();
             chipResultState.setText("圣地巡礼");
-            chipConfidence.setText("AI 已匹配");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, "AI 已匹配"));
             String animeDisplayName = chooseFirstNonBlank(
                     currentIdentifyMode == IdentifyMode.ANIME ? getUserSelectedAnimeName(parsedResult) : null,
                     bangumiLiteResponse.getCn(),
@@ -2186,7 +2237,11 @@ public class MainActivity extends AppCompatActivity {
             tvResultSummary.setText(descriptionText);
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
-                tvDesc.setText(joinLines("基于当前图片与作品线索生成", buildRematchKeywordSummary(parsedResult)));
+                tvDesc.setText(joinLines(
+                        "基于当前图片与作品线索生成",
+                        buildRematchKeywordSummary(parsedResult),
+                        buildResultGuidance(parsedResult, hasSpotCandidateOptions, false)
+                ));
             }
             tvReferenceLabel.setVisibility(View.GONE);
             if (ivResultReference != null) {
@@ -2208,6 +2263,7 @@ public class MainActivity extends AppCompatActivity {
             }
             updateNextOptionButtonState();
             updateNavigateButtonState();
+            updateNextStepHint();
         });
     }
 
@@ -2218,19 +2274,23 @@ public class MainActivity extends AppCompatActivity {
             cardResult.setVisibility(View.VISIBLE);
             allowManualAnimeRematch = true;
             updateManualAnimeRematchVisibility();
-            chipResultState.setText("暂无地点");
-            chipConfidence.setText("可重试");
+            chipResultState.setText("未找到可靠巡礼点");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, "需要补充作品名"));
             tvAnimeTitle.setText(chooseFirstNonBlank(parsedResult.animeTitle, getCurrentCandidateName("作品待确认")));
             tvLocationName.setVisibility(View.VISIBLE);
             tvLocationName.setText(chooseFirstNonBlank(parsedResult.locationName, "地点待确认"));
             tvResultSummary.setText("该作品暂未找到巡礼地点，可尝试更换作品名或补充更具体地点。");
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
-                tvDesc.setText(buildRematchKeywordSummary(parsedResult));
+                tvDesc.setText(joinLines(
+                        buildRematchKeywordSummary(parsedResult),
+                        buildResultGuidance(parsedResult, false, true)
+                ));
             }
             clearSpotCandidateViews();
             updateNextOptionButtonState();
             updateNavigateButtonState();
+            updateNextStepHint();
         });
     }
 
@@ -2262,6 +2322,7 @@ public class MainActivity extends AppCompatActivity {
             }
             MaterialCardView cardView = createCandidateCard();
             LinearLayout content = createCandidateCardContent();
+            content.addView(createCandidateText(buildSpotMatchLabel(candidate.score), 13, true));
             content.addView(createCandidateText(chooseFirstNonBlank(point.getName(), "地点名称待确认"), 15, true));
 
             List<String> lines = new ArrayList<>();
@@ -2305,6 +2366,8 @@ public class MainActivity extends AppCompatActivity {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             clearAnimeCandidateViews();
+            allowManualAnimeRematch = false;
+            updateManualAnimeRematchVisibility();
             cardResult.setVisibility(View.VISIBLE);
 
             String animeDisplayName = chooseFirstNonBlank(
@@ -2351,6 +2414,8 @@ public class MainActivity extends AppCompatActivity {
             );
             updateNextOptionButtonState();
             updateNavigateButtonState();
+            updateNextStepHint();
+            scrollToView(cardResult);
 
             if (!isBlank(pointImageUrl)) {
                 tvReferenceLabel.setVisibility(View.VISIBLE);
@@ -2399,19 +2464,65 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String buildSpotCandidateReason(ParsedResult parsedResult, AnitabiApiClient.PointDetail pointDetail) {
-        List<String> matchedTerms = new ArrayList<>();
-        for (String keyword : collectSpotMatchKeywords(parsedResult)) {
-            if (matchedTerms.size() >= 3) {
+        List<String> matchedLocationTerms = new ArrayList<>();
+        List<String> matchedVisualTerms = new ArrayList<>();
+        if (parsedResult != null) {
+            addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.locationName);
+            addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.spotSearchKeywords);
+            addMatchedTerms(matchedVisualTerms, pointDetail, parsedResult.visualKeywords);
+        }
+        addMatchedTerms(matchedVisualTerms, pointDetail, currentVisualKeywords);
+        addMatchedTerms(matchedLocationTerms, pointDetail, currentSpotSearchKeywords);
+
+        List<String> lines = new ArrayList<>();
+        if (!matchedLocationTerms.isEmpty()) {
+            lines.add("匹配原因：命中地点线索：" + joinWithSeparator(limitStrings(matchedLocationTerms, 3), " / "));
+        }
+        if (!matchedVisualTerms.isEmpty()) {
+            lines.add("命中视觉关键词：" + joinWithSeparator(limitStrings(matchedVisualTerms, 3), " / "));
+        } else if (parsedResult != null && parsedResult.visualKeywords != null && !parsedResult.visualKeywords.isEmpty()) {
+            lines.add("参考视觉关键词：" + joinWithSeparator(limitStrings(parsedResult.visualKeywords, 3), " / "));
+        }
+        lines.add("来源：Anitabi 点位 + AI 图片线索排序");
+        if (!isBlank(pointDetail.getImage())) {
+            lines.add("参考图：可用于人工核对");
+        }
+        return joinLines(lines);
+    }
+
+    private void addMatchedTerms(List<String> target, AnitabiApiClient.PointDetail pointDetail, String keyword) {
+        if (target == null || pointDetail == null || isBlank(keyword)) {
+            return;
+        }
+        if (scoreLocationMatch(keyword, pointDetail.getName(), pointDetail.getOrigin()) > 0) {
+            addKeywordIfPresent(target, keyword);
+        }
+    }
+
+    private void addMatchedTerms(List<String> target, AnitabiApiClient.PointDetail pointDetail, List<String> keywords) {
+        if (target == null || pointDetail == null || keywords == null) {
+            return;
+        }
+        for (String keyword : keywords) {
+            if (target.size() >= 3) {
+                return;
+            }
+            addMatchedTerms(target, pointDetail, keyword);
+        }
+    }
+
+    private List<String> limitStrings(List<String> values, int maxCount) {
+        List<String> limited = new ArrayList<>();
+        if (values == null || maxCount <= 0) {
+            return limited;
+        }
+        for (String value : values) {
+            if (limited.size() >= maxCount) {
                 break;
             }
-            if (!isBlank(keyword) && scoreLocationMatch(keyword, pointDetail.getName(), pointDetail.getOrigin()) > 0) {
-                matchedTerms.add(keyword);
-            }
+            addKeywordIfPresent(limited, value);
         }
-        if (matchedTerms.isEmpty()) {
-            return "匹配原因：按作品巡礼点候选展示";
-        }
-        return "匹配原因：命中地点线索：" + joinWithSeparator(matchedTerms, " / ");
+        return limited;
     }
 
     private List<String> collectSpotMatchKeywords(ParsedResult parsedResult) {
@@ -2445,6 +2556,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private String buildSpotMatchLabel(int score) {
+        if (score >= 12) {
+            return "匹配强";
+        }
+        if (score >= 4) {
+            return "匹配中";
+        }
+        return "待人工确认";
+    }
+
     private String buildRematchKeywordSummary(ParsedResult parsedResult) {
         List<String> lines = new ArrayList<>();
         if (parsedResult != null && parsedResult.visualKeywords != null && !parsedResult.visualKeywords.isEmpty()) {
@@ -2467,8 +2588,16 @@ public class MainActivity extends AppCompatActivity {
         );
         params.topMargin = dp(8);
         cardView.setLayoutParams(params);
-        cardView.setCardBackgroundColor(ContextCompat.getColor(this, R.color.surface_primary));
-        cardView.setStrokeColor(ContextCompat.getColor(this, R.color.card_stroke));
+        if (currentResultMode == ResultMode.OVERSEAS) {
+            cardView.setCardBackgroundColor(Color.parseColor("#F8FAFF"));
+            cardView.setStrokeColor(Color.parseColor("#D6DEFF"));
+        } else if (currentResultMode == ResultMode.DOMESTIC) {
+            cardView.setCardBackgroundColor(Color.parseColor("#FFFDF8"));
+            cardView.setStrokeColor(Color.parseColor("#E8DDCC"));
+        } else {
+            cardView.setCardBackgroundColor(ContextCompat.getColor(this, R.color.surface_primary));
+            cardView.setStrokeColor(ContextCompat.getColor(this, R.color.card_stroke));
+        }
         cardView.setStrokeWidth(dp(1));
         cardView.setRadius(dp(12));
         cardView.setCardElevation(0f);
@@ -2513,7 +2642,7 @@ public class MainActivity extends AppCompatActivity {
         button.setTextSize(13);
         button.setAllCaps(false);
         button.setTextColor(ContextCompat.getColor(this, android.R.color.white));
-        button.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.brand_primary)));
+        button.setBackgroundTintList(ColorStateList.valueOf(getResultModePrimaryColor()));
         button.setCornerRadius(dp(16));
         return button;
     }
@@ -2678,6 +2807,7 @@ public class MainActivity extends AppCompatActivity {
             tvReferenceLabel.setVisibility(View.GONE);
             ivResultReference.setVisibility(View.GONE);
             updateNavigateButtonState();
+            updateNextStepHint();
         });
     }
 
@@ -2707,6 +2837,7 @@ public class MainActivity extends AppCompatActivity {
         clearSpotCandidateViews();
         updateSaveRecordButtonState();
         updateNavigateButtonState();
+        updateNextStepHint();
     }
 
     private void showProcessingPlaceholder() {
@@ -2733,6 +2864,7 @@ public class MainActivity extends AppCompatActivity {
         }
         clearAnimeCandidateViews();
         clearSpotCandidateViews();
+        hideNextStepHint();
     }
 
     private void updateLoadingState(boolean loading) {
@@ -3106,6 +3238,8 @@ public class MainActivity extends AppCompatActivity {
         boolean isDomestic = getJsonBoolean(businessObject, "is_domestic");
         List<String> visualKeywords = getJsonStringList(businessObject, "visual_keywords");
         List<String> spotSearchKeywords = getJsonStringList(businessObject, "spot_search_keywords");
+        double confidence = getJsonDouble(businessObject, "confidence", -1);
+        String reason = getJsonString(businessObject, "reason");
         String displayAnimeTitle = animeNames.isEmpty()
                 ? "AI 待确认作品"
                 : chooseFirstNonBlank(animeNames.toArray(new String[0]));
@@ -3116,7 +3250,9 @@ public class MainActivity extends AppCompatActivity {
                 description,
                 isDomestic,
                 visualKeywords,
-                spotSearchKeywords
+                spotSearchKeywords,
+                confidence,
+                reason
         );
     }
 
@@ -3200,6 +3336,17 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private double getJsonDouble(JsonObject jsonObject, String key, double fallback) {
+        if (jsonObject == null || key == null || !jsonObject.has(key) || jsonObject.get(key).isJsonNull()) {
+            return fallback;
+        }
+        try {
+            return jsonObject.get(key).getAsDouble();
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
     private void bindLocationMapEntry(String locationName) {
         bindLocationMapEntry(locationName, locationName);
     }
@@ -3210,7 +3357,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         tvLocationName.setText(chooseFirstNonBlank(displayText, locationName));
-        tvLocationName.setTextColor(ContextCompat.getColor(this, R.color.brand_primary));
+        tvLocationName.setTextColor(getResultModePrimaryColor());
         tvLocationName.setPaintFlags(tvLocationName.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
         tvLocationName.setClickable(true);
         tvLocationName.setOnClickListener(view -> openMap(locationName));
@@ -3229,8 +3376,154 @@ public class MainActivity extends AppCompatActivity {
         currentNavigationTarget = null;
     }
 
+    private void applyResultModeVisualStyle(ResultMode resultMode) {
+        if (resultMode == ResultMode.DOMESTIC) {
+            applyDomesticResultVisualStyle();
+        } else if (resultMode == ResultMode.OVERSEAS) {
+            applyAnimeResultVisualStyle();
+        } else {
+            applyNeutralResultVisualStyle();
+        }
+    }
+
+    private void applyAnimeResultVisualStyle() {
+        int primary = ContextCompat.getColor(this, R.color.brand_primary);
+        int title = ContextCompat.getColor(this, R.color.text_primary);
+        int secondary = ContextCompat.getColor(this, R.color.text_secondary);
+        if (cardResult != null) {
+            cardResult.setCardBackgroundColor(Color.parseColor("#F8FAFF"));
+            cardResult.setStrokeColor(Color.parseColor("#CAD5FF"));
+            cardResult.setStrokeWidth(dp(1));
+        }
+        if (chipResultState != null) {
+            applyChipStyle(chipResultState, Color.parseColor("#E8F7F3"), Color.parseColor("#2F8F77"));
+        }
+        if (chipConfidence != null) {
+            applyChipStyle(chipConfidence, Color.parseColor("#EDF1FF"), primary);
+        }
+        if (tvAnimeTitle != null) {
+            tvAnimeTitle.setTextColor(title);
+            tvAnimeTitle.setTextSize(22);
+        }
+        if (tvLocationName != null) {
+            tvLocationName.setTextColor(primary);
+        }
+        if (layoutNextStepHint != null) {
+            layoutNextStepHint.setBackgroundResource(R.drawable.bg_next_step_anime);
+        }
+        if (tvNextStepHint != null) {
+            tvNextStepHint.setTextColor(Color.parseColor("#34406B"));
+        }
+        if (tvOverseasBadge != null) {
+            tvOverseasBadge.setText("圣地巡礼");
+        }
+        styleResultActionButtons(primary, Color.parseColor("#EDF1FF"), primary);
+    }
+
+    private void applyDomesticResultVisualStyle() {
+        int domesticPrimary = Color.parseColor("#5E9D79");
+        int domesticTitle = Color.parseColor("#315A42");
+        int domesticAccent = Color.parseColor("#E07A3F");
+        if (cardResult != null) {
+            cardResult.setCardBackgroundColor(Color.parseColor("#FFFDF8"));
+            cardResult.setStrokeColor(Color.parseColor("#E8DDCC"));
+            cardResult.setStrokeWidth(dp(1));
+        }
+        if (chipResultState != null) {
+            applyChipStyle(chipResultState, Color.parseColor("#EAF6EE"), domesticPrimary);
+        }
+        if (chipConfidence != null) {
+            applyChipStyle(chipConfidence, Color.parseColor("#FFF1E6"), domesticAccent);
+        }
+        if (tvAnimeTitle != null) {
+            tvAnimeTitle.setTextColor(domesticTitle);
+            tvAnimeTitle.setTextSize(24);
+        }
+        if (tvLocationName != null) {
+            tvLocationName.setTextColor(domesticPrimary);
+        }
+        if (layoutNextStepHint != null) {
+            layoutNextStepHint.setBackgroundResource(R.drawable.bg_next_step_domestic);
+        }
+        if (tvNextStepHint != null) {
+            tvNextStepHint.setTextColor(Color.parseColor("#6B4A25"));
+        }
+        if (tvDomesticBadge != null) {
+            tvDomesticBadge.setText("国内旅行");
+        }
+        styleResultActionButtons(domesticPrimary, Color.parseColor("#EAF6EE"), domesticPrimary);
+    }
+
+    private void applyNeutralResultVisualStyle() {
+        int primary = getThemePrimaryColor();
+        if (cardResult != null) {
+            cardResult.setCardBackgroundColor(ContextCompat.getColor(this, R.color.surface_primary));
+            cardResult.setStrokeColor(ContextCompat.getColor(this, R.color.card_stroke));
+            cardResult.setStrokeWidth(dp(1));
+        }
+        if (chipResultState != null) {
+            applyChipStyle(
+                    chipResultState,
+                    ContextCompat.getColor(this, R.color.chip_match_background),
+                    ContextCompat.getColor(this, R.color.accent_match)
+            );
+        }
+        if (chipConfidence != null) {
+            applyChipStyle(
+                    chipConfidence,
+                    ContextCompat.getColor(this, R.color.chip_brand_background),
+                    primary
+            );
+        }
+        if (tvAnimeTitle != null) {
+            tvAnimeTitle.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+            tvAnimeTitle.setTextSize(22);
+        }
+        if (tvLocationName != null) {
+            tvLocationName.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
+        }
+        if (layoutNextStepHint != null) {
+            layoutNextStepHint.setBackgroundResource(R.drawable.bg_next_step_neutral);
+        }
+        if (tvNextStepHint != null) {
+            tvNextStepHint.setTextColor(ContextCompat.getColor(this, R.color.text_body));
+        }
+        styleResultActionButtons(
+                primary,
+                ContextCompat.getColor(this, R.color.chip_brand_background),
+                primary
+        );
+    }
+
+    private void applyChipStyle(Chip chip, int backgroundColor, int textColor) {
+        chip.setChipBackgroundColor(ColorStateList.valueOf(backgroundColor));
+        chip.setTextColor(textColor);
+    }
+
+    private void styleResultActionButtons(int primaryColor, int subtleBackgroundColor, int subtleTextColor) {
+        if (btnSaveRecord != null) {
+            btnSaveRecord.setBackgroundTintList(ColorStateList.valueOf(primaryColor));
+        }
+        if (btnNextOption != null) {
+            btnNextOption.setTextColor(subtleTextColor);
+            btnNextOption.setBackgroundTintList(ColorStateList.valueOf(subtleBackgroundColor));
+            btnNextOption.setStrokeColor(ColorStateList.valueOf(Color.argb(80, Color.red(primaryColor), Color.green(primaryColor), Color.blue(primaryColor))));
+        }
+    }
+
+    private int getResultModePrimaryColor() {
+        if (currentResultMode == ResultMode.DOMESTIC) {
+            return Color.parseColor("#5E9D79");
+        }
+        if (currentResultMode == ResultMode.OVERSEAS) {
+            return ContextCompat.getColor(this, R.color.brand_primary);
+        }
+        return getThemePrimaryColor();
+    }
+
     private void switchResultMode(ResultMode resultMode) {
         currentResultMode = resultMode;
+        applyResultModeVisualStyle(resultMode);
         if (layoutOverseasContent != null) {
             layoutOverseasContent.setVisibility(resultMode == ResultMode.DOMESTIC ? View.GONE : View.VISIBLE);
         }
@@ -3366,6 +3659,83 @@ public class MainActivity extends AppCompatActivity {
         startActivity(webIntent);
     }
 
+    private String buildResultQualityLabel(@Nullable ParsedResult parsedResult, String normalLabel) {
+        if (parsedResult == null) {
+            return normalLabel;
+        }
+        if (isLowConfidenceResult(parsedResult)) {
+            return "低置信度，建议确认";
+        }
+        if (parsedResult.confidence >= 0) {
+            return normalLabel + " " + Math.round(parsedResult.confidence * 100) + "%";
+        }
+        return normalLabel;
+    }
+
+    private String buildResultGuidance(
+            @Nullable ParsedResult parsedResult,
+            boolean hasCandidateSpots,
+            boolean noSpotCandidates
+    ) {
+        if (parsedResult == null) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>();
+        if (!isBlank(parsedResult.reason)) {
+            lines.add("判断依据：" + parsedResult.reason);
+        }
+        if (noSpotCandidates) {
+            lines.add("未找到可靠巡礼点：可以更换作品名，或补充更具体的地点线索后重新匹配。");
+        } else if (isLowConfidenceResult(parsedResult)) {
+            if (currentResultMode == ResultMode.OVERSEAS) {
+                lines.add(hasCandidateSpots
+                        ? "低置信度：建议先点“换一个结果”核对其他候选；没有合适结果时再输入作品名重新匹配。"
+                        : "低置信度：建议输入正确作品名，让 AI 结合当前图片重新匹配巡礼地点。");
+            } else if (currentIdentifyMode == IdentifyMode.AUTO) {
+                lines.add("低置信度：可从侧边栏切换到动漫巡礼或国内旅行后再识别。");
+            } else {
+                lines.add("低置信度：建议重新上传更清晰图片，或切换更合适的识别模式。");
+            }
+        }
+        return joinLines(lines);
+    }
+
+    private boolean isLowConfidenceResult(@Nullable ParsedResult parsedResult) {
+        if (parsedResult == null) {
+            return false;
+        }
+        if (parsedResult.confidence >= 0 && parsedResult.confidence < 0.55) {
+            return true;
+        }
+        return containsUncertainText(parsedResult.locationName)
+                || containsUncertainText(parsedResult.summary)
+                || containsUncertainText(parsedResult.reason);
+    }
+
+    private boolean containsUncertainText(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        String normalized = value.trim();
+        return normalized.contains("待确认")
+                || normalized.contains("无法确认")
+                || normalized.contains("不确定")
+                || normalized.equals("地点待确认")
+                || normalized.equals("地点线索待确认");
+    }
+
+    private void scrollToView(@Nullable View targetView) {
+        if (scrollContent == null || targetView == null) {
+            return;
+        }
+        scrollContent.post(() -> {
+            Rect rect = new Rect();
+            targetView.getDrawingRect(rect);
+            scrollContent.offsetDescendantRectToMyCoords(targetView, rect);
+            scrollContent.smoothScrollTo(0, Math.max(0, rect.top - dp(12)));
+        });
+    }
+
     private void updateCurrentResultSnapshot(
             String animeName,
             String locationName,
@@ -3447,14 +3817,29 @@ public class MainActivity extends AppCompatActivity {
         boolean canRevealSpotCandidates = currentResultMode == ResultMode.OVERSEAS
                 && hasSpotCandidateOptions
                 && !spotCandidateListExpanded;
+        boolean canHideSpotCandidates = currentResultMode == ResultMode.OVERSEAS
+                && hasSpotCandidateOptions
+                && spotCandidateListExpanded;
         boolean hasNextCandidate = currentResultMode == ResultMode.OVERSEAS
+                && !hasSpotCandidateOptions
                 && currentCandidateNames != null
                 && currentCandidateIndex >= 0
                 && currentCandidateIndex + 1 < currentCandidateNames.size();
-        boolean canShowNextAction = canRevealSpotCandidates || hasNextCandidate;
+        boolean canShowNextAction = canRevealSpotCandidates || canHideSpotCandidates || hasNextCandidate;
         btnNextOption.setVisibility(canShowNextAction ? View.VISIBLE : View.GONE);
         btnNextOption.setEnabled(canShowNextAction);
-        btnNextOption.setText("🔄 换一个结果");
+        if (canHideSpotCandidates) {
+            btnNextOption.setText("收起候选");
+        } else if (canRevealSpotCandidates) {
+            btnNextOption.setText(currentSpotCandidateCount > 0
+                    ? "查看其他候选(" + Math.min(currentSpotCandidateCount, 5) + ")"
+                    : "查看其他候选");
+        } else if (hasNextCandidate) {
+            btnNextOption.setText("换一个作品候选");
+        } else {
+            btnNextOption.setText("换一个结果");
+        }
+        updateNextStepHint();
     }
 
     private void updateNavigateButtonState() {
@@ -3466,6 +3851,65 @@ public class MainActivity extends AppCompatActivity {
                 || (lastParsedResult != null && !isBlank(lastParsedResult.locationName)));
         btnNavigateSpot.setVisibility(canNavigate ? View.VISIBLE : View.GONE);
         btnNavigateSpot.setEnabled(canNavigate);
+    }
+
+    private void updateNextStepHint() {
+        if (layoutNextStepHint == null || tvNextStepHint == null || cardResult == null
+                || cardResult.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        String hint = buildNextStepHint();
+        if (isBlank(hint)) {
+            hideNextStepHint();
+            return;
+        }
+        tvNextStepHint.setText("下一步：" + hint);
+        layoutNextStepHint.setVisibility(View.VISIBLE);
+    }
+
+    private void hideNextStepHint() {
+        if (layoutNextStepHint != null) {
+            layoutNextStepHint.setVisibility(View.GONE);
+        }
+        if (tvNextStepHint != null) {
+            tvNextStepHint.setText("");
+        }
+    }
+
+    private String buildNextStepHint() {
+        if (currentResultMode == ResultMode.NONE) {
+            return "";
+        }
+        ParsedResult parsedResult = lastParsedResult;
+        boolean lowConfidence = isLowConfidenceResult(parsedResult);
+        if (currentResultMode == ResultMode.DOMESTIC) {
+            if (lowConfidence) {
+                return currentIdentifyMode == IdentifyMode.AUTO
+                        ? "结果不够确定，可从侧边栏切换到国内旅行或动漫巡礼后再识别。"
+                        : "结果不够确定，建议重新上传更清晰图片或切换识别模式。";
+            }
+            return "结果较明确，可以保存打卡；需要路线时可点击导航。";
+        }
+        if (spotCandidateListExpanded) {
+            return "从候选中选择更匹配的地点，或收起候选回到当前主结果。";
+        }
+        if (hasSpotCandidateOptions) {
+            return lowConfidence
+                    ? "建议先查看其他候选；没有合适结果时再输入作品名或地点线索重新匹配。"
+                    : "结果较明确，可以保存打卡；不确定时可查看其他候选。";
+        }
+        if (allowManualAnimeRematch || lowConfidence) {
+            return "建议输入作品名或地点线索重新匹配。";
+        }
+        if (currentCandidateNames != null
+                && currentCandidateIndex >= 0
+                && currentCandidateIndex + 1 < currentCandidateNames.size()) {
+            return "可以换一个作品候选继续匹配。";
+        }
+        if (!isBlank(confirmedAnimeName) || !isBlank(currentAnimeName)) {
+            return "结果较明确，可以保存打卡。";
+        }
+        return "";
     }
 
     private void updateSaveRecordButtonState() {
@@ -3577,6 +4021,47 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Exception exception) {
                 Log.d(DEBUG_TAG, "management theme match skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void requestManagementRecognitionAssist(ParsedResult parsedResult, int searchGeneration) {
+        if (tourInfoApiClient == null || parsedResult == null) {
+            return;
+        }
+        String keyword = chooseFirstNonBlank(
+                parsedResult.locationName,
+                parsedResult.animeTitle,
+                parsedResult.animeNames != null && !parsedResult.animeNames.isEmpty()
+                        ? parsedResult.animeNames.get(0)
+                        : null,
+                currentLocation
+        );
+        if (isBlank(keyword)) {
+            return;
+        }
+        tourInfoApiClient.getRecognitionAssist(keyword, "android-local", new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
+            @Override
+            public void onSuccess(TourRecognitionAssistResponse data) {
+                if (isStaleSearch(searchGeneration) || data == null || data.getItems() == null || data.getItems().isEmpty()) {
+                    return;
+                }
+                TourRecognitionAssistCandidate candidate = data.getItems().get(0);
+                String supplement = buildManagementAssistSupplement(candidate);
+                if (isBlank(supplement)) {
+                    return;
+                }
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    addManagementSupplementSection(supplement);
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management recognition assist skipped: " + exception.getMessage());
             }
         });
     }
@@ -3696,6 +4181,24 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    private String buildManagementAssistSupplement(TourRecognitionAssistCandidate candidate) {
+        if (candidate == null || isBlank(candidate.getLocationName())) {
+            return "";
+        }
+        String sourceText = "learned".equals(candidate.getCandidateSource())
+                ? "用户学习候选"
+                : "正式地点库";
+        return joinLines(
+                "识别学习辅助",
+                "候选地点：" + candidate.getLocationName(),
+                isBlank(candidate.getThemeName()) ? "" : "关联主题：" + candidate.getThemeName(),
+                "候选来源：" + sourceText,
+                "综合评分：" + formatCostAmount(candidate.getScore()),
+                isBlank(candidate.getAddress()) ? "" : "地址：" + candidate.getAddress(),
+                isBlank(candidate.getRecommendReason()) ? "" : "推荐依据：" + candidate.getRecommendReason()
+        );
+    }
+
     private String buildManagementCostSupplement(TourRecognitionCostResult cost) {
         if (cost == null) {
             return "";
@@ -3743,6 +4246,15 @@ public class MainActivity extends AppCompatActivity {
         }
         String currentText = target.getText() != null ? target.getText().toString() : "";
         int markerIndex = currentText.indexOf("后台辅助信息");
+        if (markerIndex < 0) {
+            markerIndex = currentText.indexOf("本次估算成本");
+        }
+        if (markerIndex < 0) {
+            markerIndex = currentText.indexOf("识别学习辅助");
+        }
+        if (markerIndex < 0) {
+            markerIndex = currentText.indexOf("后台辅助信息");
+        }
         if (markerIndex < 0) {
             markerIndex = currentText.indexOf("本次估算成本");
         }

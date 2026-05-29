@@ -444,6 +444,32 @@
                         tools:text="现实地点名称占位：如果地点名和副标题很长，也要避免把下面的图片挤坏" />
 
                     <LinearLayout
+                        android:id="@+id/layoutNextStepHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="14dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="14dp"
+                        android:paddingBottom="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvNextStepHint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:breakStrategy="high_quality"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="3dp"
+                            android:textColor="@color/text_body"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            tools:text="下一步：结果较明确，可以保存打卡。" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/layoutOverseasContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -518,7 +544,7 @@
                                 android:paddingTop="6dp"
                                 android:paddingEnd="12dp"
                                 android:paddingBottom="6dp"
-                                android:text="🎬 圣地巡礼"
+                                android:text="圣地巡礼"
                                 android:textColor="@android:color/white"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
@@ -668,9 +694,21 @@
                             android:paddingTop="6dp"
                             android:paddingEnd="12dp"
                             android:paddingBottom="6dp"
-                            android:text="📍 国内漫游"
+                            android:text="国内旅行"
                             android:textColor="#4F8A66"
                             android:textSize="12sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticPanelTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:includeFontPadding="false"
+                            android:text="旅行目的地"
+                            android:textColor="#315A42"
+                            android:textSize="20sp"
                             android:textStyle="bold"
                             tools:ignore="HardcodedText" />
 
@@ -678,7 +716,7 @@
                             android:id="@+id/tvDomesticAddressLabel"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="16dp"
+                            android:layout_marginTop="14dp"
                             android:includeFontPadding="false"
                             android:text="@string/label_domestic_address"
                             android:textColor="@color/text_primary"
