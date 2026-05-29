@@ -6,6 +6,11 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
 public class TourAuthSession {
 
     public static final String LOCAL_APP_USER_ID = "android-local";
@@ -53,10 +58,13 @@ public class TourAuthSession {
     }
 
     public boolean isLoggedIn() {
-        return !isBlank(getToken()) && !LOCAL_APP_USER_ID.equals(getCurrentAppUserId());
+        return hasUsableLogin();
     }
 
     public String getCurrentAppUserId() {
+        if (!hasUsableLogin()) {
+            return LOCAL_APP_USER_ID;
+        }
         return firstNonBlank(storage.getString(KEY_USERNAME), LOCAL_APP_USER_ID);
     }
 
@@ -74,6 +82,38 @@ public class TourAuthSession {
 
     public String getExpiresAt() {
         return storage.getString(KEY_EXPIRES_AT);
+    }
+
+    private boolean hasUsableLogin() {
+        return !isBlank(getToken()) && !isBlank(storage.getString(KEY_USERNAME)) && !isExpired();
+    }
+
+    private boolean isExpired() {
+        String expiresAt = getExpiresAt();
+        if (isBlank(expiresAt)) {
+            return false;
+        }
+        Date expiresAtDate = parseDate(expiresAt);
+        return expiresAtDate != null && expiresAtDate.getTime() <= System.currentTimeMillis();
+    }
+
+    @Nullable
+    private Date parseDate(@NonNull String value) {
+        String[] patterns = new String[] {
+                "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+                "yyyy-MM-dd'T'HH:mm:ssXXX",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        };
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
+                format.setTimeZone(TimeZone.getTimeZone("UTC"));
+                return format.parse(value);
+            } catch (Exception ignored) {
+                // Try the next common ISO-8601 shape returned by the backend.
+            }
+        }
+        return null;
     }
 
     private static String firstNonBlank(String... values) {

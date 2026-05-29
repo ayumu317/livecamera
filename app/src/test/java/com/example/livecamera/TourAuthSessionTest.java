@@ -54,6 +54,20 @@ public class TourAuthSessionTest {
         assertEquals("", session.getToken());
     }
 
+    @Test
+    public void expiredSessionFallsBackToLocalAppUserId() {
+        TourAuthSession session = new TourAuthSession(new MemoryStorage());
+        TourAuthResult authResult = new Gson().fromJson(
+                "{\"token\":\"token-123\",\"expires_at\":\"2000-01-01T00:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\"}}",
+                TourAuthResult.class
+        );
+
+        session.save(authResult);
+
+        assertFalse(session.isLoggedIn());
+        assertEquals(TourAuthSession.LOCAL_APP_USER_ID, session.getCurrentAppUserId());
+    }
+
     private static final class MemoryStorage implements TourAuthSession.Storage {
         private final Map<String, String> values = new HashMap<>();
 
