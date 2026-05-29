@@ -62,6 +62,7 @@ import com.google.android.material.navigation.NavigationView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -84,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_IMAGE_EDGE = 1024;
     private static final int JPEG_QUALITY = 80;
     private static final String PRIVATE_CAPTURE_DIR_NAME = "livecamera_captures";
+    private static final String PRIVATE_DIARY_DIR_NAME = "livecamera_diary";
     private static final String CACHE_CAPTURE_DIR_NAME = "images";
     private static final String PREFS_NAME = "livecamera_settings";
     private static final String PREF_DEFAULT_MODE = "default_identify_mode";
@@ -1092,6 +1094,25 @@ public class MainActivity extends AppCompatActivity {
         throw new IOException("Unable to create private image directory");
     }
 
+    private File getPrivateDiaryImageDirectory() throws IOException {
+        File externalPicturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if (externalPicturesDir != null) {
+            File privateDiaryDir = new File(externalPicturesDir, PRIVATE_DIARY_DIR_NAME);
+            if (ensureDirectoryReady(privateDiaryDir)) {
+                ensureNoMediaFile(privateDiaryDir);
+                return privateDiaryDir;
+            }
+            Log.w(TAG, "Unable to prepare app-specific diary image directory, falling back to internal files");
+        }
+
+        File internalDiaryDir = new File(getFilesDir(), PRIVATE_DIARY_DIR_NAME);
+        if (ensureDirectoryReady(internalDiaryDir)) {
+            ensureNoMediaFile(internalDiaryDir);
+            return internalDiaryDir;
+        }
+        throw new IOException("Unable to create diary image directory");
+    }
+
     @Nullable
     private File resolveCapturedImageFile(String fileName) {
         if (isBlank(fileName)) {
@@ -1129,6 +1150,44 @@ public class MainActivity extends AppCompatActivity {
             }
         } catch (IOException e) {
             Log.w(TAG, "Failed to create .nomedia in " + directory.getAbsolutePath(), e);
+        }
+    }
+
+    private String createPersistentDiaryImageCopy(String sourceUriString, long timestamp) {
+        if (isBlank(sourceUriString)) {
+            return "";
+        }
+        Uri sourceUri;
+        try {
+            sourceUri = Uri.parse(sourceUriString);
+        } catch (Exception e) {
+            Log.w(TAG, "Invalid diary image uri, keeping original value");
+            return sourceUriString;
+        }
+
+        try {
+            File diaryDir = getPrivateDiaryImageDirectory();
+            File targetFile = new File(
+                    diaryDir,
+                    "diary_" + timestamp + "_" + Math.abs(sourceUriString.hashCode()) + ".jpg"
+            );
+            try (InputStream inputStream = getContentResolver().openInputStream(sourceUri);
+                 FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                if (inputStream == null) {
+                    Log.w(TAG, "Unable to open source image for diary copy: " + sourceUri.getScheme());
+                    return sourceUriString;
+                }
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+            }
+            Log.d(DEBUG_TAG, "diary image copied to private storage");
+            return Uri.fromFile(targetFile).toString();
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to copy diary image, keeping original uri", e);
+            return sourceUriString;
         }
     }
 
@@ -3956,24 +4015,26 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        PilgrimRecord record = new PilgrimRecord();
-        record.animeName = animeNameToSave;
-        record.locationName = locationToSave;
-        record.description = descToSave;
-        record.localImageUri = localImageUriToSave;
-        record.referenceImageUrl = referenceImageUrlToSave;
-        record.timestamp = System.currentTimeMillis();
         IdentifyMode recognitionModeToSave = currentIdentifyMode;
         boolean isDomesticRecord = currentResultMode == ResultMode.DOMESTIC;
+        long recordTimestamp = System.currentTimeMillis();
 
         backgroundExecutor.execute(() -> {
             try {
+                String persistentLocalImageUri = createPersistentDiaryImageCopy(localImageUriToSave, recordTimestamp);
+                PilgrimRecord record = new PilgrimRecord();
+                record.animeName = animeNameToSave;
+                record.locationName = locationToSave;
+                record.description = descToSave;
+                record.localImageUri = persistentLocalImageUri;
+                record.referenceImageUrl = referenceImageUrlToSave;
+                record.timestamp = recordTimestamp;
                 AppDatabase.getInstance(MainActivity.this).pilgrimDao().insert(record);
                 submitManagementRecognitionRecord(
                         animeNameToSave,
                         locationToSave,
                         descToSave,
-                        localImageUriToSave,
+                        persistentLocalImageUri,
                         recognitionModeToSave,
                         isDomesticRecord
                 );
