@@ -55,6 +55,27 @@ public class TourAuthSessionTest {
     }
 
     @Test
+    public void updateUserPreservesTokenAndRefreshesDisplayName() {
+        TourAuthSession session = new TourAuthSession(new MemoryStorage());
+        Gson gson = new Gson();
+        TourAuthResult authResult = gson.fromJson(
+                "{\"token\":\"token-123\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"Traveler\"}}",
+                TourAuthResult.class
+        );
+        TourAuthResult profileResult = gson.fromJson(
+                "{\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"New Name\"}}",
+                TourAuthResult.class
+        );
+
+        session.save(authResult);
+        session.updateUser(profileResult.getUser());
+
+        assertTrue(session.isLoggedIn());
+        assertEquals("token-123", session.getToken());
+        assertEquals("New Name", session.getDisplayName());
+    }
+
+    @Test
     public void expiredSessionFallsBackToLocalAppUserId() {
         TourAuthSession session = new TourAuthSession(new MemoryStorage());
         TourAuthResult authResult = new Gson().fromJson(

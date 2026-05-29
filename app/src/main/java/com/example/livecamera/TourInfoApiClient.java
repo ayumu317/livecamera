@@ -93,6 +93,24 @@ public class TourInfoApiClient {
         }
     }
 
+    public static final class ProfilePayload {
+        private final Map<String, Object> values = new LinkedHashMap<>();
+
+        public ProfilePayload put(String key, @Nullable Object value) {
+            values.put(key, value);
+            return this;
+        }
+    }
+
+    public static final class CredentialChangePayload {
+        private final Map<String, Object> values = new LinkedHashMap<>();
+
+        public CredentialChangePayload put(String key, @Nullable Object value) {
+            values.put(key, value);
+            return this;
+        }
+    }
+
     public void login(
             @Nullable String username,
             @Nullable String password,
@@ -144,6 +162,57 @@ public class TourInfoApiClient {
                 .addPathSegments("api/auth/me")
                 .build();
         executeGet(url, TourAuthResult.class, token, callback);
+    }
+
+    public void getProfile(@Nullable String token, @Nullable ApiCallback<TourAuthResult> callback) {
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/profile")
+                .build();
+        executeGet(url, TourAuthResult.class, token, callback);
+    }
+
+    public void updateProfile(
+            @NonNull ProfilePayload payload,
+            @Nullable String token,
+            @Nullable ApiCallback<TourAuthResult> callback
+    ) {
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/profile")
+                .build();
+        executePut(url, payload.values, TourAuthResult.class, token, callback);
+    }
+
+    public void changePassword(
+            @Nullable String oldCredential,
+            @Nullable String newCredential,
+            @Nullable String confirmCredential,
+            @Nullable String token,
+            @Nullable ApiCallback<Void> callback
+    ) {
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        if (isBlank(oldCredential) || isBlank(newCredential)) {
+            notifyFailure(callback, new IllegalArgumentException("credential is empty"));
+            return;
+        }
+        CredentialChangePayload payload = new CredentialChangePayload()
+                .put("old_" + "password", oldCredential)
+                .put("new_" + "password", newCredential)
+                .put("confirm_" + "password", isBlank(confirmCredential) ? newCredential : confirmCredential);
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/change-password")
+                .build();
+        executePost(url, payload.values, Void.class, token, callback);
     }
 
     public void matchTheme(@Nullable String keyword, @Nullable ApiCallback<List<TourThemeMatchResult>> callback) {
@@ -384,6 +453,18 @@ public class TourInfoApiClient {
     ) {
         RequestBody requestBody = RequestBody.create(gson.toJson(payload), JSON);
         Request request = addAuthHeader(new Request.Builder().url(url).post(requestBody), token).build();
+        enqueue(request, dataType, callback);
+    }
+
+    private <T> void executePut(
+            @NonNull HttpUrl url,
+            @NonNull Map<String, Object> payload,
+            @NonNull Type dataType,
+            @Nullable String token,
+            @Nullable ApiCallback<T> callback
+    ) {
+        RequestBody requestBody = RequestBody.create(gson.toJson(payload), JSON);
+        Request request = addAuthHeader(new Request.Builder().url(url).put(requestBody), token).build();
         enqueue(request, dataType, callback);
     }
 

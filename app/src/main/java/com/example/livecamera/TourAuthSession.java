@@ -42,6 +42,17 @@ public class TourAuthSession {
         TourAuthUser user = authResult.getUser();
         storage.putString(KEY_TOKEN, authResult.getToken());
         storage.putString(KEY_EXPIRES_AT, authResult.getExpiresAt());
+        saveUser(user);
+    }
+
+    public void updateUser(@Nullable TourAuthUser user) {
+        if (user == null || isBlank(user.getUsername())) {
+            return;
+        }
+        saveUser(user);
+    }
+
+    private void saveUser(@NonNull TourAuthUser user) {
         storage.putString(KEY_USER_ID, String.valueOf(user.getId()));
         storage.putString(KEY_USERNAME, user.getUsername());
         storage.putString(KEY_DISPLAY_NAME, firstNonBlank(

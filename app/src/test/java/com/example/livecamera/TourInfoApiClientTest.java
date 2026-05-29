@@ -149,6 +149,66 @@ public class TourInfoApiClientTest {
     }
 
     @Test
+    public void profileSendsAuthorizationHeaderAndParsesContactFields() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"user\":{\"id\":9,\"username\":\"demo_user\",\"role\":\"user\",\"display_name\":\"Demo\",\"nickname\":\"Traveler\",\"phone\":\"18800001111\",\"email\":\"demo@example.com\",\"avatar_url\":\"https://example.com/a.png\"}}}"));
+
+        Result<TourAuthResult> result = awaitSuccess(
+                callback -> client.getProfile("token-profile", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/auth/profile", request.getPath());
+        assertEquals("Bearer token-profile", request.getHeader("Authorization"));
+        assertEquals("18800001111", result.data.getUser().getPhone());
+        assertEquals("demo@example.com", result.data.getUser().getEmail());
+    }
+
+    @Test
+    public void updateProfilePutsEditableFields() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"user\":{\"id\":9,\"username\":\"demo_user\",\"role\":\"user\",\"display_name\":\"Traveler\",\"nickname\":\"Traveler\",\"phone\":\"18800001111\",\"email\":\"demo@example.com\",\"avatar_url\":\"https://example.com/a.png\"}}}"));
+        TourInfoApiClient.ProfilePayload payload = new TourInfoApiClient.ProfilePayload()
+                .put("nickname", "Traveler")
+                .put("phone", "18800001111")
+                .put("email", "demo@example.com")
+                .put("avatar_url", "https://example.com/a.png");
+
+        Result<TourAuthResult> result = awaitSuccess(
+                callback -> client.updateProfile(payload, "token-profile", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("PUT", request.getMethod());
+        assertEquals("/api/auth/profile", request.getPath());
+        assertEquals("Bearer token-profile", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"nickname\":\"Traveler\""));
+        assertTrue(body.contains("\"avatar_url\":\"https://example.com/a.png\""));
+        assertEquals("Traveler", result.data.getUser().getNickname());
+    }
+
+    @Test
+    public void changePasswordPostsCredentialsWithToken() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":null}"));
+
+        this.<Void>awaitSuccess(
+                callback -> client.changePassword("old-credential", "new-credential", "new-credential", "token-profile", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/auth/change-password", request.getPath());
+        assertEquals("Bearer token-profile", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"old_password\":\"old-credential\""));
+        assertTrue(body.contains("\"new_password\":\"new-credential\""));
+        assertTrue(body.contains("\"confirm_password\":\"new-credential\""));
+    }
+
+    @Test
     public void loginRejectsBlankCredentialsWithoutNetworkRequest() throws Exception {
         Exception error = this.<TourAuthResult>awaitFailure(callback -> client.login("", "user123456", callback));
 

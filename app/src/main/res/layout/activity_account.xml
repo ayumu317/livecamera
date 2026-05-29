@@ -74,7 +74,6 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:fillViewport="true"
         android:paddingStart="20dp"
         android:paddingTop="16dp"
         android:paddingEnd="20dp"
@@ -122,7 +121,7 @@
                         android:lineSpacingExtra="4dp"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp"
-                        tools:text="未登录时后台增强会使用 android-local，不影响识别、导航和日记。" />
+                        tools:text="未登录时后台增强会使用 android-local" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -184,11 +183,161 @@
                 app:cornerRadius="27dp"
                 tools:ignore="HardcodedText" />
 
+            <LinearLayout
+                android:id="@+id/layoutProfileEditor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/etProfileNickname"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="@color/surface_primary"
+                    android:hint="昵称"
+                    android:inputType="textPersonName"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <EditText
+                    android:id="@+id/etProfilePhone"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/surface_primary"
+                    android:hint="手机号"
+                    android:inputType="phone"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <EditText
+                    android:id="@+id/etProfileEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/surface_primary"
+                    android:hint="邮箱"
+                    android:inputType="textEmailAddress"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <EditText
+                    android:id="@+id/etProfileAvatarUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/surface_primary"
+                    android:hint="头像 URL"
+                    android:inputType="textUri"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnProfileSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:layout_marginTop="12dp"
+                    android:text="保存资料"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/brand_primary"
+                    app:cornerRadius="27dp"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/layoutCredentialEditor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/etOldCredential"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:autofillHints="password"
+                    android:background="@color/surface_primary"
+                    android:hint="原密码"
+                    android:inputType="textPassword"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <EditText
+                    android:id="@+id/etNewCredential"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:autofillHints="newPassword"
+                    android:background="@color/surface_primary"
+                    android:hint="新密码"
+                    android:inputType="textPassword"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <EditText
+                    android:id="@+id/etConfirmCredential"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:autofillHints="newPassword"
+                    android:background="@color/surface_primary"
+                    android:hint="确认新密码"
+                    android:inputType="textPassword"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    tools:ignore="HardcodedText" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnChangeCredential"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:layout_marginTop="12dp"
+                    android:text="修改密码"
+                    android:textAllCaps="false"
+                    android:textColor="@color/brand_primary"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/chip_brand_background"
+                    app:cornerRadius="27dp"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnAccountLogout"
                 android:layout_width="match_parent"
                 android:layout_height="54dp"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="18dp"
                 android:text="退出登录"
                 android:textAllCaps="false"
                 android:textColor="@color/brand_primary"

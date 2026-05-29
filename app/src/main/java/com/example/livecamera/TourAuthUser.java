@@ -22,6 +22,15 @@ public class TourAuthUser {
     @SerializedName("display_name")
     private String displayName;
 
+    @SerializedName("phone")
+    private String phone;
+
+    @SerializedName("email")
+    private String email;
+
+    @SerializedName("avatar_url")
+    private String avatarUrl;
+
     public int getId() {
         return id;
     }
@@ -44,5 +53,17 @@ public class TourAuthUser {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
     }
 }
