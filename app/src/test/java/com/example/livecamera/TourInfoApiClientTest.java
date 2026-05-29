@@ -80,6 +80,68 @@ public class TourInfoApiClientTest {
     }
 
     @Test
+    public void loginPostsCredentialsAndParsesAuthResult() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"登录成功\",\"data\":{\"token\":\"token-123\",\"expires_in\":28800,\"expires_at\":\"2026-05-29T12:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"旅行者\"}}}"));
+
+        Result<TourAuthResult> result = awaitSuccess(
+                callback -> client.login("traveler", "user123456", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/auth/login", request.getPath());
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"username\":\"traveler\""));
+        assertTrue(body.contains("\"password\":\"user123456\""));
+        assertEquals("token-123", result.data.getToken());
+        assertEquals("traveler", result.data.getUser().getUsername());
+    }
+
+    @Test
+    public void registerPostsCredentialsAndParsesAuthResult() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"注册成功\",\"data\":{\"token\":\"token-456\",\"expires_in\":28800,\"expires_at\":\"2026-05-29T12:00:00Z\",\"user\":{\"id\":8,\"username\":\"new_user\",\"role\":\"user\",\"display_name\":\"new_user\"}}}"));
+
+        Result<TourAuthResult> result = awaitSuccess(
+                callback -> client.register("new_user", "user123456", "user123456", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/auth/register", request.getPath());
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"username\":\"new_user\""));
+        assertTrue(body.contains("\"password\":\"user123456\""));
+        assertEquals("token-456", result.data.getToken());
+        assertEquals(8, result.data.getUser().getId());
+    }
+
+    @Test
+    public void meSendsAuthorizationHeaderAndParsesUser() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"user\":{\"id\":9,\"username\":\"demo_user\",\"role\":\"user\",\"display_name\":\"Demo\"}}}"));
+
+        Result<TourAuthResult> result = awaitSuccess(
+                callback -> client.me("token-789", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/auth/me", request.getPath());
+        assertEquals("Bearer token-789", request.getHeader("Authorization"));
+        assertEquals("demo_user", result.data.getUser().getUsername());
+    }
+
+    @Test
+    public void loginRejectsBlankCredentialsWithoutNetworkRequest() throws Exception {
+        Exception error = this.<TourAuthResult>awaitFailure(callback -> client.login("", "user123456", callback));
+
+        assertTrue(error instanceof IllegalArgumentException);
+        assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
     public void createRecognitionRecordPostsJsonAndParsesRecord() throws Exception {
         server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"created\",\"data\":{\"id\":12,\"app_user_id\":\"demo_user\",\"recognized_theme\":\"Tokyo\",\"recognized_location\":\"Akihabara\",\"status\":\"confirmed\"}}"));
         TourInfoApiClient.RecognitionRecordPayload payload = new TourInfoApiClient.RecognitionRecordPayload()

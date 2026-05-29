@@ -30,7 +30,7 @@ import okhttp3.Response;
 public class TourInfoApiClient {
 
     private static final String TAG = "TourInfoApiClient";
-    private static final String DEFAULT_BASE_URL = "http://10.18.117.136:5000";
+    private static final String DEFAULT_BASE_URL = BuildConfig.MANAGEMENT_BASE_URL;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient httpClient;
@@ -73,6 +73,59 @@ public class TourInfoApiClient {
             values.put(key, value);
             return this;
         }
+    }
+
+    public void login(
+            @Nullable String username,
+            @Nullable String password,
+            @Nullable ApiCallback<TourAuthResult> callback
+    ) {
+        if (isBlank(username) || isBlank(password)) {
+            notifyFailure(callback, new IllegalArgumentException("username or password is empty"));
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("username", username.trim());
+        payload.put("password", password);
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/login")
+                .build();
+        executePost(url, payload, TourAuthResult.class, callback);
+    }
+
+    public void register(
+            @Nullable String username,
+            @Nullable String password,
+            @Nullable String confirmPassword,
+            @Nullable ApiCallback<TourAuthResult> callback
+    ) {
+        if (isBlank(username) || isBlank(password)) {
+            notifyFailure(callback, new IllegalArgumentException("username or password is empty"));
+            return;
+        }
+        if (!isBlank(confirmPassword) && !password.equals(confirmPassword)) {
+            notifyFailure(callback, new IllegalArgumentException("password confirmation does not match"));
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("username", username.trim());
+        payload.put("password", password);
+        payload.put("nickname", username.trim());
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/register")
+                .build();
+        executePost(url, payload, TourAuthResult.class, callback);
+    }
+
+    public void me(@Nullable String token, @Nullable ApiCallback<TourAuthResult> callback) {
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/auth/me")
+                .build();
+        executeGet(url, TourAuthResult.class, token, callback);
     }
 
     public void matchTheme(@Nullable String keyword, @Nullable ApiCallback<List<TourThemeMatchResult>> callback) {
@@ -144,7 +197,16 @@ public class TourInfoApiClient {
             @NonNull Type dataType,
             @Nullable ApiCallback<T> callback
     ) {
-        Request request = new Request.Builder().url(url).get().build();
+        executeGet(url, dataType, null, callback);
+    }
+
+    private <T> void executeGet(
+            @NonNull HttpUrl url,
+            @NonNull Type dataType,
+            @Nullable String token,
+            @Nullable ApiCallback<T> callback
+    ) {
+        Request request = addAuthHeader(new Request.Builder().url(url).get(), token).build();
         enqueue(request, dataType, callback);
     }
 
@@ -154,9 +216,26 @@ public class TourInfoApiClient {
             @NonNull Type dataType,
             @Nullable ApiCallback<T> callback
     ) {
+        executePost(url, payload, dataType, null, callback);
+    }
+
+    private <T> void executePost(
+            @NonNull HttpUrl url,
+            @NonNull Map<String, Object> payload,
+            @NonNull Type dataType,
+            @Nullable String token,
+            @Nullable ApiCallback<T> callback
+    ) {
         RequestBody requestBody = RequestBody.create(gson.toJson(payload), JSON);
-        Request request = new Request.Builder().url(url).post(requestBody).build();
+        Request request = addAuthHeader(new Request.Builder().url(url).post(requestBody), token).build();
         enqueue(request, dataType, callback);
+    }
+
+    private Request.Builder addAuthHeader(@NonNull Request.Builder builder, @Nullable String token) {
+        if (!isBlank(token)) {
+            builder.header("Authorization", "Bearer " + token.trim());
+        }
+        return builder;
     }
 
     private <T> void enqueue(
