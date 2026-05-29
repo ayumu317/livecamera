@@ -160,6 +160,7 @@ public class MainActivity extends AppCompatActivity {
     private TencentLocationHelper tencentLocationHelper;
     private LocationSearchClient locationSearchClient;
     private TourInfoApiClient tourInfoApiClient;
+    private TourAuthSession tourAuthSession;
 
     private Uri selectedImageUri;
     private Uri pendingCameraImageUri;
@@ -333,6 +334,7 @@ public class MainActivity extends AppCompatActivity {
         tencentLocationHelper = new TencentLocationHelper(this);
         locationSearchClient = new LocationSearchClient();
         tourInfoApiClient = new TourInfoApiClient();
+        tourAuthSession = new TourAuthSession(this);
         initViewState();
         initListeners();
         restoreState(savedInstanceState);
@@ -4040,7 +4042,7 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(keyword)) {
             return;
         }
-        tourInfoApiClient.getRecognitionAssist(keyword, "android-local", new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
+        tourInfoApiClient.getRecognitionAssist(keyword, getCurrentManagementAppUserId(), new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
             @Override
             public void onSuccess(TourRecognitionAssistResponse data) {
                 if (isStaleSearch(searchGeneration) || data == null || data.getItems() == null || data.getItems().isEmpty()) {
@@ -4078,7 +4080,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         TourInfoApiClient.RecognitionRecordPayload payload = new TourInfoApiClient.RecognitionRecordPayload()
-                .put("app_user_id", "android-local")
+                .put("app_user_id", getCurrentManagementAppUserId())
                 .put("image_uri", imageUri)
                 .put("recognition_mode", recognitionMode != null
                         ? recognitionMode.name().toLowerCase(Locale.ROOT)
@@ -4120,7 +4122,7 @@ public class MainActivity extends AppCompatActivity {
         }
         TourInfoApiClient.CorrectionPayload payload = new TourInfoApiClient.CorrectionPayload()
                 .put("recognition_id", lastManagementRecognitionId)
-                .put("app_user_id", "android-local")
+                .put("app_user_id", getCurrentManagementAppUserId())
                 .put("original_theme", chooseFirstNonBlank(
                         confirmedAnimeName,
                         currentAnimeName,
@@ -4167,6 +4169,13 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(DEBUG_TAG, "management cost skipped: " + exception.getMessage());
             }
         });
+    }
+
+    private String getCurrentManagementAppUserId() {
+        if (tourAuthSession == null) {
+            return TourAuthSession.LOCAL_APP_USER_ID;
+        }
+        return chooseFirstNonBlank(tourAuthSession.getCurrentAppUserId(), TourAuthSession.LOCAL_APP_USER_ID);
     }
 
     private String buildManagementThemeSupplement(TourThemeMatchResult theme) {
