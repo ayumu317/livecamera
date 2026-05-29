@@ -75,6 +75,15 @@ public class TourInfoApiClient {
         }
     }
 
+    public static final class RouteFavoritePayload {
+        private final Map<String, Object> values = new LinkedHashMap<>();
+
+        public RouteFavoritePayload put(String key, @Nullable Object value) {
+            values.put(key, value);
+            return this;
+        }
+    }
+
     public void login(
             @Nullable String username,
             @Nullable String password,
@@ -227,6 +236,46 @@ public class TourInfoApiClient {
                 .addPathSegments("api/app/recognition/cost/" + recognitionId)
                 .build();
         executeGet(url, TourRecognitionCostResult.class, token, callback);
+    }
+
+    public void getLocationDetail(
+            int locationId,
+            @Nullable ApiCallback<TourLocationDetailResult> callback
+    ) {
+        getLocationDetail(locationId, null, callback);
+    }
+
+    public void getLocationDetail(
+            int locationId,
+            @Nullable String token,
+            @Nullable ApiCallback<TourLocationDetailResult> callback
+    ) {
+        if (locationId <= 0) {
+            notifyFailure(callback, new IllegalArgumentException("locationId is invalid"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/app/location/detail/" + locationId)
+                .build();
+        executeGet(url, TourLocationDetailResult.class, token, callback);
+    }
+
+    public void favoriteRoute(
+            @NonNull RouteFavoritePayload payload,
+            @Nullable ApiCallback<TourFavoriteRouteResult> callback
+    ) {
+        favoriteRoute(payload, null, callback);
+    }
+
+    public void favoriteRoute(
+            @NonNull RouteFavoritePayload payload,
+            @Nullable String token,
+            @Nullable ApiCallback<TourFavoriteRouteResult> callback
+    ) {
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/app/route/favorite")
+                .build();
+        executePost(url, payload.values, TourFavoriteRouteResult.class, token, callback);
     }
 
     public void cancelAll() {

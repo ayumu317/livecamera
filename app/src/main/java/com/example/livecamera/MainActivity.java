@@ -524,9 +524,7 @@ public class MainActivity extends AppCompatActivity {
             btnSaveRecord.setOnClickListener(view -> saveCurrentRecord());
         }
         if (btnNavigateSpot != null) {
-            btnNavigateSpot.setOnClickListener(view -> openMap(getPreferredLocationDisplayName(
-                    lastParsedResult != null ? lastParsedResult.locationName : currentLocation
-            )));
+            btnNavigateSpot.setOnClickListener(view -> navigateCurrentSpot());
         }
         if (btnNextOption != null) {
             btnNextOption.setOnClickListener(v -> {
@@ -3687,6 +3685,52 @@ public class MainActivity extends AppCompatActivity {
         return joinLines(lines);
     }
 
+    private void navigateCurrentSpot() {
+        String locationName = getPreferredLocationDisplayName(
+                lastParsedResult != null ? lastParsedResult.locationName : currentLocation
+        );
+        openMap(locationName);
+        syncManagementFavoriteRoute(locationName);
+    }
+
+    private void syncManagementFavoriteRoute(@Nullable String fallbackLocationName) {
+        if (tourInfoApiClient == null) {
+            return;
+        }
+        String routeLocationName = chooseFirstNonBlank(
+                currentNavigationTarget != null ? currentNavigationTarget.displayName : null,
+                fallbackLocationName,
+                currentLocation,
+                lastParsedResult != null ? lastParsedResult.locationName : null
+        );
+        if (isBlank(routeLocationName)) {
+            return;
+        }
+        String routeSummary = chooseFirstNonBlank(
+                currentNavigationTarget != null ? currentNavigationTarget.address : null,
+                lastParsedResult != null ? lastParsedResult.summary : null,
+                "APP 地图导航触发的路线收藏"
+        );
+        TourInfoApiClient.RouteFavoritePayload payload = new TourInfoApiClient.RouteFavoritePayload()
+                .put("app_user_id", getCurrentManagementAppUserId())
+                .put("route_name", routeLocationName + " 导航路线")
+                .put("route_summary", routeSummary)
+                .put("location_ids", "")
+                .put("total_distance", 0)
+                .put("estimated_minutes", 0);
+        tourInfoApiClient.favoriteRoute(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourFavoriteRouteResult>() {
+            @Override
+            public void onSuccess(TourFavoriteRouteResult data) {
+                Log.d(DEBUG_TAG, "management route favorite synced");
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management route favorite skipped: " + exception.getMessage());
+            }
+        });
+    }
+
     private void openMap(String locationName) {
         if (locationName == null || locationName.trim().isEmpty()) {
             return;
@@ -4083,7 +4127,7 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(keyword)) {
             return;
         }
-        tourInfoApiClient.matchTheme(keyword, new TourInfoApiClient.ApiCallback<List<TourThemeMatchResult>>() {
+        tourInfoApiClient.matchTheme(keyword, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<List<TourThemeMatchResult>>() {
             @Override
             public void onSuccess(List<TourThemeMatchResult> data) {
                 if (isStaleSearch(searchGeneration) || data == null || data.isEmpty()) {
@@ -4132,6 +4176,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 TourRecognitionAssistCandidate candidate = data.getItems().get(0);
                 String supplement = buildManagementAssistSupplement(candidate);
+                requestManagementLocationDetail(candidate, searchGeneration);
                 if (isBlank(supplement)) {
                     return;
                 }
@@ -4146,6 +4191,39 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Exception exception) {
                 Log.d(DEBUG_TAG, "management recognition assist skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void requestManagementLocationDetail(
+            @Nullable TourRecognitionAssistCandidate candidate,
+            int searchGeneration
+    ) {
+        if (tourInfoApiClient == null || candidate == null
+                || candidate.getLocationId() == null || candidate.getLocationId() <= 0) {
+            return;
+        }
+        tourInfoApiClient.getLocationDetail(candidate.getLocationId(), getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourLocationDetailResult>() {
+            @Override
+            public void onSuccess(TourLocationDetailResult data) {
+                if (isStaleSearch(searchGeneration) || data == null) {
+                    return;
+                }
+                String detailText = buildManagementLocationDetailSupplement(data);
+                if (isBlank(detailText)) {
+                    return;
+                }
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    addManagementSupplementSection(detailText);
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management location detail skipped: " + exception.getMessage());
             }
         });
     }
@@ -4311,6 +4389,21 @@ public class MainActivity extends AppCompatActivity {
                 "综合评分：" + formatCostAmount(candidate.getScore()),
                 isBlank(candidate.getAddress()) ? "" : "地址：" + candidate.getAddress(),
                 isBlank(candidate.getRecommendReason()) ? "" : "推荐依据：" + candidate.getRecommendReason()
+        );
+    }
+
+    private String buildManagementLocationDetailSupplement(TourLocationDetailResult detail) {
+        if (detail == null || isBlank(detail.getLocationName())) {
+            return "";
+        }
+        return joinLines(
+                "后台地点详情补充",
+                "地点：" + detail.getLocationName(),
+                isBlank(detail.getLocationType()) ? "" : "类型：" + detail.getLocationType(),
+                isBlank(detail.getAddress()) ? "" : "地址：" + detail.getAddress(),
+                isBlank(detail.getCity()) ? "" : "城市：" + detail.getCity(),
+                isBlank(detail.getCountry()) ? "" : "国家：" + detail.getCountry(),
+                isBlank(detail.getDescription()) ? "" : "说明：" + detail.getDescription()
         );
     }
 

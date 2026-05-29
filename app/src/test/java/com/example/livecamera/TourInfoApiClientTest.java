@@ -2,6 +2,7 @@ package com.example.livecamera;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -222,6 +223,73 @@ public class TourInfoApiClientTest {
 
         assertTrue(error instanceof IllegalArgumentException);
         assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
+    public void locationDetailBuildsExpectedUrlAndParsesResponse() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"id\":1,\"theme_id\":2,\"location_name\":\"Akihabara Electric Town\",\"country\":\"Japan\",\"city\":\"Tokyo\",\"address\":\"Akihabara\",\"longitude\":139.771,\"latitude\":35.698,\"location_type\":\"pilgrimage\",\"description\":\"Anime stores\",\"reference_image_url\":\"cover.jpg\",\"status\":\"active\"}}"));
+
+        Result<TourLocationDetailResult> result = awaitSuccess(
+                callback -> client.getLocationDetail(1, "token-detail", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/app/location/detail/1", request.getPath());
+        assertEquals("Bearer token-detail", request.getHeader("Authorization"));
+        assertEquals("Akihabara Electric Town", result.data.getLocationName());
+        assertEquals("Tokyo", result.data.getCity());
+        assertEquals(35.698, result.data.getLatitude(), 0.001);
+    }
+
+    @Test
+    public void locationDetailRejectsInvalidIdWithoutNetworkRequest() throws Exception {
+        Exception error = this.<TourLocationDetailResult>awaitFailure(callback -> client.getLocationDetail(0, callback));
+
+        assertTrue(error instanceof IllegalArgumentException);
+        assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
+    public void favoriteRoutePostsJsonWithTokenAndParsesResponse() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"created\",\"data\":{\"id\":5,\"user_id\":2,\"app_user_id\":\"traveler\",\"route_name\":\"Akihabara 导航路线\",\"location_ids\":\"\",\"route_summary\":\"APP navigation\",\"total_distance\":0,\"estimated_minutes\":0}}"));
+        TourInfoApiClient.RouteFavoritePayload payload = new TourInfoApiClient.RouteFavoritePayload()
+                .put("app_user_id", "traveler")
+                .put("route_name", "Akihabara 导航路线")
+                .put("location_ids", "")
+                .put("route_summary", "APP navigation")
+                .put("total_distance", 0)
+                .put("estimated_minutes", 0);
+
+        Result<TourFavoriteRouteResult> result = awaitSuccess(
+                callback -> client.favoriteRoute(payload, "token-route", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/app/route/favorite", request.getPath());
+        assertEquals("Bearer token-route", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"route_name\":\"Akihabara 导航路线\""));
+        assertTrue(body.contains("\"app_user_id\":\"traveler\""));
+        assertEquals(5, result.data.getId());
+        assertEquals("traveler", result.data.getAppUserId());
+    }
+
+    @Test
+    public void favoriteRouteWithoutTokenOmitsAuthorizationHeader() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"created\",\"data\":{\"id\":6,\"app_user_id\":\"android-local\",\"route_name\":\"Local route\",\"location_ids\":null,\"route_summary\":null,\"total_distance\":0,\"estimated_minutes\":0}}"));
+        TourInfoApiClient.RouteFavoritePayload payload = new TourInfoApiClient.RouteFavoritePayload()
+                .put("app_user_id", "android-local")
+                .put("route_name", "Local route");
+
+        this.<TourFavoriteRouteResult>awaitSuccess(callback -> client.favoriteRoute(payload, callback));
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertNull(request.getHeader("Authorization"));
     }
 
     private MockResponse jsonResponse(String body) {
