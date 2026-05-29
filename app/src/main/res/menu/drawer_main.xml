@@ -42,6 +42,11 @@
                 android:title="账号中心" />
 
             <item
+                android:id="@+id/nav_travel_plans"
+                android:icon="@android:drawable/ic_menu_agenda"
+                android:title="待出行计划" />
+
+            <item
                 android:id="@+id/nav_about"
                 android:icon="@android:drawable/ic_dialog_info"
                 android:title="关于与说明" />

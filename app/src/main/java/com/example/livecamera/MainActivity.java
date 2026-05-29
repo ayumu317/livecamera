@@ -506,6 +506,8 @@ public class MainActivity extends AppCompatActivity {
                     openSettingsPage();
                 } else if (itemId == R.id.nav_account) {
                     openAccountPage();
+                } else if (itemId == R.id.nav_travel_plans) {
+                    openTravelPlanPage();
                 } else if (itemId == R.id.nav_about) {
                     showToast("默认智能识别；可从侧边栏切换动漫巡礼或国内旅行。");
                 }
@@ -655,6 +657,37 @@ public class MainActivity extends AppCompatActivity {
 
     private void openAccountPage() {
         startActivity(new Intent(this, AccountActivity.class));
+    }
+
+    private void openTravelPlanPage() {
+        Intent intent = new Intent(this, TravelPlanActivity.class);
+        String placeName = chooseFirstNonBlank(
+                currentNavigationTarget != null ? currentNavigationTarget.displayName : null,
+                lastParsedResult != null ? lastParsedResult.locationName : null,
+                currentLocation
+        );
+        if (!isBlank(placeName)) {
+            intent.putExtra(TravelPlanActivity.EXTRA_PLACE_NAME, placeName);
+        }
+        String address = chooseFirstNonBlank(
+                currentNavigationTarget != null ? currentNavigationTarget.address : null,
+                currentLocation
+        );
+        if (!isBlank(address)) {
+            intent.putExtra(TravelPlanActivity.EXTRA_PLACE_ADDRESS, address);
+        }
+        String description = chooseFirstNonBlank(
+                lastParsedResult != null ? lastParsedResult.summary : null,
+                currentDesc
+        );
+        if (!isBlank(description)) {
+            intent.putExtra(TravelPlanActivity.EXTRA_PLACE_DESCRIPTION, description);
+        }
+        if (currentNavigationTarget != null && currentNavigationTarget.hasCoordinates()) {
+            intent.putExtra(TravelPlanActivity.EXTRA_PLACE_LATITUDE, currentNavigationTarget.latitude);
+            intent.putExtra(TravelPlanActivity.EXTRA_PLACE_LONGITUDE, currentNavigationTarget.longitude);
+        }
+        startActivity(intent);
     }
 
     private void openSettingsMenu() {

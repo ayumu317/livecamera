@@ -292,6 +292,74 @@ public class TourInfoApiClientTest {
         assertNull(request.getHeader("Authorization"));
     }
 
+    @Test
+    public void listTravelPlansBuildsExpectedUrlAndParsesPage() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"items\":[{\"id\":2,\"plan_name\":\"Tokyo Week\",\"destination_name\":\"Tokyo\",\"destination_city\":\"Tokyo\",\"destination_country\":\"Japan\",\"travel_days\":3,\"budget_amount\":1200,\"travel_status\":\"pending\"}],\"total\":1,\"page\":1,\"page_size\":20}}"));
+
+        Result<TourTravelPlanPageResult> result = awaitSuccess(
+                callback -> client.listTravelPlans(1, 20, "token-plan", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/admin/travel-plans?page=1&page_size=20", request.getPath());
+        assertEquals("Bearer token-plan", request.getHeader("Authorization"));
+        assertEquals(1, result.data.getTotal());
+        assertEquals("Tokyo Week", result.data.getItems().get(0).getPlanName());
+    }
+
+    @Test
+    public void travelPlanOverviewBuildsExpectedUrlAndParsesAttractions() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"plan\":{\"id\":2,\"plan_name\":\"Tokyo Week\",\"destination_name\":\"Tokyo\"},\"routes\":[],\"hotels\":[],\"weather_records\":[],\"attractions\":[{\"id\":7,\"plan_id\":2,\"attraction_name\":\"Akihabara\",\"address\":\"Tokyo\",\"longitude\":139.771,\"latitude\":35.698,\"description\":\"Electric town\",\"sort_order\":1}]}}"));
+
+        Result<TourTravelPlanOverviewResult> result = awaitSuccess(
+                callback -> client.getTravelPlanOverview(2, "token-plan", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/admin/travel-plans/2/overview", request.getPath());
+        assertEquals("Bearer token-plan", request.getHeader("Authorization"));
+        assertEquals("Tokyo Week", result.data.getPlan().getPlanName());
+        assertEquals("Akihabara", result.data.getAttractions().get(0).getAttractionName());
+    }
+
+    @Test
+    public void addPlaceToTravelPlanPostsExpectedJson() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":201,\"message\":\"created\",\"data\":{\"id\":8,\"plan_id\":2,\"attraction_name\":\"Akihabara\",\"address\":\"Tokyo\",\"longitude\":139.771,\"latitude\":35.698,\"description\":\"from app\",\"sort_order\":2}}"));
+        TourInfoApiClient.TravelPlacePayload payload = new TourInfoApiClient.TravelPlacePayload()
+                .put("title", "Akihabara")
+                .put("address", "Tokyo")
+                .put("latitude", 35.698)
+                .put("longitude", 139.771);
+
+        Result<TourTravelAttractionResult> result = awaitSuccess(
+                callback -> client.addPlaceToTravelPlan(2, payload, "token-plan", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/admin/travel-plans/2/attractions/from-place", request.getPath());
+        assertEquals("Bearer token-plan", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"title\":\"Akihabara\""));
+        assertTrue(body.contains("\"latitude\":35.698"));
+        assertEquals(8, result.data.getId());
+    }
+
+    @Test
+    public void travelPlanCallsRejectMissingTokenBeforeNetworkRequest() throws Exception {
+        Exception error = this.<TourTravelPlanPageResult>awaitFailure(
+                callback -> client.listTravelPlans(1, 20, "", callback)
+        );
+
+        assertTrue(error instanceof IllegalArgumentException);
+        assertEquals(0, server.getRequestCount());
+    }
+
     private MockResponse jsonResponse(String body) {
         return new MockResponse()
                 .setResponseCode(200)

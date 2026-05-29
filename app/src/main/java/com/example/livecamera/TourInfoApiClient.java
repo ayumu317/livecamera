@@ -84,6 +84,15 @@ public class TourInfoApiClient {
         }
     }
 
+    public static final class TravelPlacePayload {
+        private final Map<String, Object> values = new LinkedHashMap<>();
+
+        public TravelPlacePayload put(String key, @Nullable Object value) {
+            values.put(key, value);
+            return this;
+        }
+    }
+
     public void login(
             @Nullable String username,
             @Nullable String password,
@@ -276,6 +285,63 @@ public class TourInfoApiClient {
                 .addPathSegments("api/app/route/favorite")
                 .build();
         executePost(url, payload.values, TourFavoriteRouteResult.class, token, callback);
+    }
+
+    public void listTravelPlans(
+            int page,
+            int pageSize,
+            @Nullable String token,
+            @Nullable ApiCallback<TourTravelPlanPageResult> callback
+    ) {
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/admin/travel-plans")
+                .addQueryParameter("page", String.valueOf(Math.max(page, 1)))
+                .addQueryParameter("page_size", String.valueOf(Math.max(pageSize, 1)))
+                .build();
+        executeGet(url, TourTravelPlanPageResult.class, token, callback);
+    }
+
+    public void getTravelPlanOverview(
+            int planId,
+            @Nullable String token,
+            @Nullable ApiCallback<TourTravelPlanOverviewResult> callback
+    ) {
+        if (planId <= 0) {
+            notifyFailure(callback, new IllegalArgumentException("planId is invalid"));
+            return;
+        }
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/admin/travel-plans/" + planId + "/overview")
+                .build();
+        executeGet(url, TourTravelPlanOverviewResult.class, token, callback);
+    }
+
+    public void addPlaceToTravelPlan(
+            int planId,
+            @NonNull TravelPlacePayload payload,
+            @Nullable String token,
+            @Nullable ApiCallback<TourTravelAttractionResult> callback
+    ) {
+        if (planId <= 0) {
+            notifyFailure(callback, new IllegalArgumentException("planId is invalid"));
+            return;
+        }
+        if (isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("token is empty"));
+            return;
+        }
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/admin/travel-plans/" + planId + "/attractions/from-place")
+                .build();
+        executePost(url, payload.values, TourTravelAttractionResult.class, token, callback);
     }
 
     public void cancelAll() {
