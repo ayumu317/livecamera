@@ -41,6 +41,10 @@ public class SerpApiClient {
     }
 
     public void fetchFallbackImage(String animeName, String locationName, Callback callback) {
+        fetchImageByQuery(buildQuery(animeName, locationName), callback);
+    }
+
+    public void fetchImageByQuery(String query, Callback callback) {
         if (callback == null) {
             return;
         }
@@ -56,14 +60,18 @@ public class SerpApiClient {
             return;
         }
 
-        String query = buildQuery(animeName, locationName);
+        String safeQuery = query == null ? "" : query.trim();
+        if (isBlank(safeQuery)) {
+            callback.onFailure(new IllegalArgumentException("SerpApi 搜图关键词为空"));
+            return;
+        }
         HttpUrl url = baseUrl.newBuilder()
                 .addQueryParameter("engine", "google_images")
-                .addQueryParameter("q", query)
+                .addQueryParameter("q", safeQuery)
                 .addQueryParameter("api_key", apiKey)
                 .build();
 
-        Log.d(DEBUG_TAG, "SerpApi 搜图关键词: " + query);
+        Log.d(DEBUG_TAG, "SerpApi 搜图关键词: " + safeQuery);
 
         Request request = new Request.Builder()
                 .url(url)

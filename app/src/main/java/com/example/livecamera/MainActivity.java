@@ -46,6 +46,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestBuilder;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
@@ -105,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
 
     private ShapeableImageView ivScenePreview;
     private ShapeableImageView ivResultReference;
+    private ShapeableImageView ivWorkCover;
     private TextView tvPreviewPlaceholderHint;
     private LinearLayout layoutActionButtons;
     private MaterialButton btnOpenCamera;
@@ -118,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText etManualAnimeName;
     private MaterialButton btnSearchManualAnime;
     private MaterialButton btnSaveRecord;
+    private MaterialButton btnConfirmAnimeResult;
     private MaterialButton btnNextOption;
     private MaterialButton btnNavigateSpot;
     private MaterialCardView cardResult;
@@ -125,6 +128,8 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout layoutOverseasContent;
     private LinearLayout layoutDomesticContent;
     private LinearLayout layoutNextStepHint;
+    private LinearLayout layoutWorkInfo;
+    private LinearLayout layoutBackendCost;
     private LinearLayout layoutAnimeRematch;
     private LinearLayout layoutAnimeCandidateList;
     private LinearLayout layoutSpotCandidateList;
@@ -138,6 +143,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvOverseasBadge;
     private TextView tvDomesticBadge;
     private TextView tvNextStepHint;
+    private TextView tvWorkInfo;
+    private TextView tvBackendCost;
     private Chip chipResultState;
     private Chip chipConfidence;
     private ProgressBar pbLoading;
@@ -147,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
     private SharedPreferences appSettings;
-    private String previewMode = PREVIEW_FIT;
+    private String previewMode = PREVIEW_FILL;
     private String saveAction = SAVE_ACTION_STAY;
     private String colorTheme = THEME_DEFAULT;
     private boolean refreshSettingsOnResume;
@@ -192,6 +199,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean hasSpotCandidateOptions;
     private boolean spotCandidateListExpanded;
     private boolean allowManualAnimeRematch;
+    private boolean pendingAnimeResultConfirmation;
     private int currentSpotCandidateCount;
     private int activeSearchGeneration = 0;
     private int pendingLocationPermissionSearchGeneration = -1;
@@ -403,6 +411,7 @@ public class MainActivity extends AppCompatActivity {
         scrollContent = findOptionalViewByName("scrollContent");
         ivScenePreview = findViewById(R.id.iv_preview);
         ivResultReference = findViewById(R.id.iv_result_reference);
+        ivWorkCover = findOptionalViewByName("iv_work_cover");
         tvPreviewPlaceholderHint = findViewById(R.id.tvPreviewPlaceholderHint);
         layoutActionButtons = findViewById(R.id.layoutActionButtons);
         btnOpenCamera = findViewById(R.id.btn_camera);
@@ -416,12 +425,15 @@ public class MainActivity extends AppCompatActivity {
         etManualAnimeName = findViewById(R.id.etManualAnimeName);
         btnSearchManualAnime = findViewById(R.id.btnSearchManualAnime);
         btnSaveRecord = findOptionalViewByName("btnSaveRecord");
+        btnConfirmAnimeResult = findOptionalViewByName("btnConfirmAnimeResult");
         btnNextOption = findOptionalViewByName("btnNextOption");
         btnNavigateSpot = findOptionalViewByName("btnNavigateSpot");
         cardResult = findViewById(R.id.cardResult);
         layoutOverseasContent = findOptionalViewByName("layoutOverseasContent");
         layoutDomesticContent = findOptionalViewByName("layoutDomesticContent");
         layoutNextStepHint = findOptionalViewByName("layoutNextStepHint");
+        layoutWorkInfo = findOptionalViewByName("layoutWorkInfo");
+        layoutBackendCost = findOptionalViewByName("layoutBackendCost");
         layoutAnimeRematch = findViewById(R.id.layoutAnimeRematch);
         layoutAnimeCandidateList = findViewById(R.id.layoutAnimeCandidateList);
         layoutSpotCandidateList = findViewById(R.id.layoutSpotCandidateList);
@@ -435,6 +447,8 @@ public class MainActivity extends AppCompatActivity {
         tvOverseasBadge = findOptionalViewByName("tvOverseasBadge");
         tvDomesticBadge = findOptionalViewByName("tvDomesticBadge");
         tvNextStepHint = findOptionalViewByName("tvNextStepHint");
+        tvWorkInfo = findOptionalViewByName("tvWorkInfo");
+        tvBackendCost = findOptionalViewByName("tvBackendCost");
         chipResultState = findViewById(R.id.chipResultState);
         chipConfidence = findViewById(R.id.chipConfidence);
         pbLoading = findOptionalViewByName("pb_loading");
@@ -524,6 +538,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (btnSaveRecord != null) {
             btnSaveRecord.setOnClickListener(view -> saveCurrentRecord());
+        }
+        if (btnConfirmAnimeResult != null) {
+            btnConfirmAnimeResult.setOnClickListener(view -> confirmCurrentAnimeResult());
         }
         if (btnNavigateSpot != null) {
             btnNavigateSpot.setOnClickListener(view -> navigateCurrentSpot());
@@ -736,7 +753,8 @@ public class MainActivity extends AppCompatActivity {
                 appSettings.getString(PREF_DEFAULT_MODE, IdentifyMode.AUTO.name())
         );
         previewMode = chooseKnownValue(
-                appSettings.getString(PREF_PREVIEW_MODE, PREVIEW_FIT),
+                appSettings.getString(PREF_PREVIEW_MODE, PREVIEW_FILL),
+                PREVIEW_FILL,
                 PREVIEW_FIT,
                 PREVIEW_FILL
         );
@@ -1020,6 +1038,10 @@ public class MainActivity extends AppCompatActivity {
             }
             lastParsedResult = parsedResult;
             prepareAnimeRoute(parsedResult, "ANIME");
+            if (hasReliableAnimeLocation(parsedResult)) {
+                selectAnimeCandidateAsCurrentResult(userAnimeName, parsedResult);
+                return;
+            }
             currentCandidateNames = new ArrayList<>(parsedResult.animeNames);
             currentCandidateIndex = 0;
             currentCandidateLocation = parsedResult.locationName;
@@ -1284,10 +1306,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        Glide.with(this)
-                .load(imageUri)
-                .fitCenter()
-                .listener(new RequestListener<Drawable>() {
+        RequestBuilder<Drawable> previewRequest = Glide.with(this).load(imageUri);
+        previewRequest = PREVIEW_FILL.equals(previewMode)
+                ? previewRequest.centerCrop()
+                : previewRequest.fitCenter();
+        previewRequest.listener(new RequestListener<Drawable>() {
                     @Override
                     public boolean onLoadFailed(
                             @Nullable GlideException e,
@@ -1731,7 +1754,7 @@ public class MainActivity extends AppCompatActivity {
             if (ivResultReference != null) {
                 ivResultReference.setVisibility(View.GONE);
             }
-            renderAnimeCandidateList(parsedResult.animeNames);
+            renderAnimeCandidateList(parsedResult);
             clearSpotCandidateViews();
             updateCurrentResultSnapshot(
                     parsedResult.animeTitle,
@@ -1744,16 +1767,18 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void renderAnimeCandidateList(List<String> animeNames) {
+    private void renderAnimeCandidateList(ParsedResult parsedResult) {
         if (layoutAnimeCandidateList == null) {
             return;
         }
         layoutAnimeCandidateList.removeAllViews();
+        List<String> animeNames = parsedResult != null ? parsedResult.animeNames : null;
         if (animeNames == null || animeNames.isEmpty()) {
             return;
         }
         TextView titleView = createCandidateText("AI 作品候选", 15, true);
         layoutAnimeCandidateList.addView(titleView);
+        boolean canConfirmDirectly = canDirectConfirmAnimeResult(parsedResult);
         for (String animeName : animeNames) {
             if (isBlank(animeName)) {
                 continue;
@@ -1761,13 +1786,674 @@ public class MainActivity extends AppCompatActivity {
             MaterialCardView cardView = createCandidateCard();
             LinearLayout content = createCandidateCardContent();
             TextView nameView = createCandidateText(animeName, 15, true);
-            MaterialButton actionButton = createCandidateActionButton("使用此作品匹配");
-            actionButton.setOnClickListener(view -> startAnimeRematchWithWork(animeName, true));
             content.addView(nameView);
+            if (canConfirmDirectly) {
+                MaterialButton confirmButton = createCandidateActionButton("选定此作品");
+                confirmButton.setOnClickListener(view -> handleAnimeCandidateDirectConfirm(animeName, parsedResult));
+                content.addView(confirmButton);
+            }
+            MaterialButton actionButton = createCandidateActionButton("使用此作品匹配");
+            actionButton.setOnClickListener(view -> handleAnimeCandidateRematchRequest(animeName, parsedResult));
             content.addView(actionButton);
             cardView.addView(content);
             layoutAnimeCandidateList.addView(cardView);
         }
+    }
+
+    private void handleAnimeCandidateDirectConfirm(String animeName, ParsedResult parsedResult) {
+        if (shouldExpandSeriesCandidate(animeName)) {
+            renderSeriesWorkChoiceList(animeName, parsedResult, true);
+            return;
+        }
+        selectAnimeCandidateAsCurrentResult(animeName, parsedResult);
+    }
+
+    private void handleAnimeCandidateRematchRequest(String animeName, ParsedResult parsedResult) {
+        if (shouldExpandSeriesCandidate(animeName)) {
+            renderSeriesWorkChoiceList(animeName, parsedResult, false);
+            return;
+        }
+        startAnimeRematchWithWork(animeName, true);
+    }
+
+    private boolean shouldExpandSeriesCandidate(String animeName) {
+        if (isBlank(animeName)) {
+            return false;
+        }
+        String normalized = animeName.toLowerCase(Locale.ROOT);
+        return animeName.contains("全系列")
+                || animeName.contains("系列")
+                || normalized.contains("series")
+                || normalized.contains("franchise");
+    }
+
+    private void renderSeriesWorkChoiceList(String groupName, ParsedResult parsedResult, boolean directConfirm) {
+        if (layoutAnimeCandidateList == null) {
+            return;
+        }
+        List<String> seriesNames = collectSeriesWorkCandidates(groupName, parsedResult);
+        if (seriesNames.isEmpty()) {
+            if (directConfirm) {
+                selectAnimeCandidateAsCurrentResult(groupName, parsedResult);
+            } else {
+                startAnimeRematchWithWork(groupName, true);
+            }
+            return;
+        }
+        layoutAnimeCandidateList.removeAllViews();
+        layoutAnimeCandidateList.addView(createCandidateText("请选择具体系列作品", 15, true));
+        layoutAnimeCandidateList.addView(createCandidateText("“全系列”会包含多部作品；先选准确的一部，再结合当前图片重新匹配巡礼地点。", 13, false));
+        for (String seriesName : seriesNames) {
+            MaterialCardView cardView = createCandidateCard();
+            LinearLayout content = createCandidateCardContent();
+            content.addView(createCandidateText(seriesName, 15, true));
+            MaterialButton actionButton = createCandidateActionButton(directConfirm ? "选定此作品" : "使用此作品匹配");
+            actionButton.setOnClickListener(view -> {
+                Log.d(DEBUG_TAG, "selected series work = " + seriesName);
+                if (directConfirm) {
+                    selectAnimeCandidateAsCurrentResult(seriesName, parsedResult);
+                } else {
+                    startAnimeRematchWithWork(seriesName, true);
+                }
+            });
+            content.addView(actionButton);
+            cardView.addView(content);
+            layoutAnimeCandidateList.addView(cardView);
+        }
+        scrollToView(layoutAnimeCandidateList);
+    }
+
+    private List<String> collectSeriesWorkCandidates(String groupName, @Nullable ParsedResult parsedResult) {
+        List<String> results = new ArrayList<>();
+        if (parsedResult != null && parsedResult.animeNames != null) {
+            for (String candidateName : parsedResult.animeNames) {
+                if (!isBlank(candidateName) && !candidateName.equals(groupName) && !shouldExpandSeriesCandidate(candidateName)) {
+                    addKeywordIfPresent(results, candidateName);
+                }
+            }
+        }
+        addKeywordsIfPresent(results, getKnownSeriesWorks(groupName));
+        if (results.isEmpty() && shouldExpandSeriesCandidate(groupName)) {
+            addKeywordIfPresent(results, cleanupSeriesName(groupName));
+        }
+        return results;
+    }
+
+    private List<String> buildWorkInfoSearchNames(String animeName) {
+        List<String> names = new ArrayList<>();
+        addKeywordIfPresent(names, animeName);
+        String cleanedSeriesName = cleanupSeriesName(animeName);
+        addKeywordIfPresent(names, cleanedSeriesName);
+        addKeywordsIfPresent(names, getKnownTitleAliases(animeName));
+        addKeywordsIfPresent(names, getKnownSeriesWorks(animeName));
+        addKeywordIfPresent(names, toTraditionalChineseTitle(animeName));
+        addKeywordIfPresent(names, toTraditionalChineseTitle(cleanedSeriesName));
+        addKeywordIfPresent(names, removeBookTitleMarks(animeName));
+        return names;
+    }
+
+    private String cleanupSeriesName(String animeName) {
+        if (isBlank(animeName)) {
+            return "";
+        }
+        return animeName
+                .replace("全系列", "")
+                .replace("系列作品", "")
+                .replace("系列", "")
+                .replace(" franchise", "")
+                .replace(" Franchise", "")
+                .replace(" series", "")
+                .replace(" Series", "")
+                .trim();
+    }
+
+    private String removeBookTitleMarks(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        return value.replace("《", "").replace("》", "").trim();
+    }
+
+    private List<String> getKnownSeriesWorks(String groupName) {
+        List<String> results = new ArrayList<>();
+        String normalized = groupName == null ? "" : groupName.toLowerCase(Locale.ROOT);
+        if (normalized.contains("lovelive") || normalized.contains("love live") || groupName.contains("虹咲")) {
+            addKeywordIfPresent(results, "LoveLive!");
+            addKeywordIfPresent(results, "LoveLive! Sunshine!!");
+            addKeywordIfPresent(results, "LoveLive! 虹咲学园学园偶像同好会");
+            addKeywordIfPresent(results, "LoveLive! 虹咲学园校园偶像同好会");
+            addKeywordIfPresent(results, "ラブライブ！虹ヶ咲学園スクールアイドル同好会");
+            addKeywordIfPresent(results, "LoveLive! Superstar!!");
+            addKeywordIfPresent(results, "LoveLive! 蓮之空女学院スクールアイドルクラブ");
+        } else if (normalized.contains("fate") || groupName.contains("命运")) {
+            addKeywordIfPresent(results, "Fate/stay night");
+            addKeywordIfPresent(results, "Fate/Zero");
+            addKeywordIfPresent(results, "Fate/stay night [Unlimited Blade Works]");
+            addKeywordIfPresent(results, "Fate/stay night: Heaven's Feel");
+            addKeywordIfPresent(results, "Fate/Grand Order");
+        } else if (groupName.contains("物语") || groupName.contains("物語")) {
+            addKeywordIfPresent(results, "化物語");
+            addKeywordIfPresent(results, "偽物語");
+            addKeywordIfPresent(results, "猫物語");
+            addKeywordIfPresent(results, "囮物語");
+            addKeywordIfPresent(results, "終物語");
+        } else if (normalized.contains("bang dream") || normalized.contains("bandori") || groupName.contains("邦邦")) {
+            addKeywordIfPresent(results, "BanG Dream!");
+            addKeywordIfPresent(results, "BanG Dream! It's MyGO!!!!!");
+            addKeywordIfPresent(results, "BanG Dream! Ave Mujica");
+        } else if (groupName.contains("偶像大师") || groupName.contains("偶像大師") || normalized.contains("idolmaster")) {
+            addKeywordIfPresent(results, "THE IDOLM@STER");
+            addKeywordIfPresent(results, "アイドルマスター シンデレラガールズ");
+            addKeywordIfPresent(results, "アイドルマスター ミリオンライブ！");
+            addKeywordIfPresent(results, "アイドルマスター シャイニーカラーズ");
+        } else if (groupName.contains("高达") || groupName.contains("鋼彈") || normalized.contains("gundam")) {
+            addKeywordIfPresent(results, "機動戦士ガンダム");
+            addKeywordIfPresent(results, "機動戦士ガンダムSEED");
+            addKeywordIfPresent(results, "機動戦士ガンダム 水星の魔女");
+        } else if (groupName.contains("魔法少女小圆") || groupName.contains("魔法少女小圓") || normalized.contains("madoka")) {
+            addKeywordIfPresent(results, "魔法少女まどか☆マギカ");
+            addKeywordIfPresent(results, "劇場版 魔法少女まどか☆マギカ");
+        } else if (normalized.contains("evangelion") || groupName.contains("福音战士") || groupName.contains("福音戰士")) {
+            addKeywordIfPresent(results, "新世紀エヴァンゲリオン");
+            addKeywordIfPresent(results, "ヱヴァンゲリヲン新劇場版");
+        } else if (normalized.contains("jojo") || groupName.contains("乔乔") || groupName.contains("JOJO")) {
+            addKeywordIfPresent(results, "ジョジョの奇妙な冒険");
+            addKeywordIfPresent(results, "ジョジョの奇妙な冒険 スターダストクルセイダース");
+            addKeywordIfPresent(results, "ジョジョの奇妙な冒険 ダイヤモンドは砕けない");
+        }
+        return results;
+    }
+
+    private List<String> getKnownTitleAliases(String animeName) {
+        List<String> aliases = new ArrayList<>();
+        if (isBlank(animeName)) {
+            return aliases;
+        }
+        String normalized = animeName.toLowerCase(Locale.ROOT);
+        if (animeName.contains("虹咲") || normalized.contains("nijigasaki")) {
+            addKeywordIfPresent(aliases, "ラブライブ！虹ヶ咲学園スクールアイドル同好会");
+            addKeywordIfPresent(aliases, "Love Live! Nijigasaki High School Idol Club");
+            addKeywordIfPresent(aliases, "LoveLive! Nijigasaki");
+        }
+        if (animeName.contains("路人女主")) {
+            addKeywordIfPresent(aliases, "冴えない彼女の育てかた");
+            addKeywordIfPresent(aliases, "Saekano");
+        }
+        if (animeName.contains("你的名字")) {
+            addKeywordIfPresent(aliases, "君の名は。");
+            addKeywordIfPresent(aliases, "Your Name.");
+        }
+        if (animeName.contains("天气之子") || animeName.contains("天氣之子")) {
+            addKeywordIfPresent(aliases, "天気の子");
+            addKeywordIfPresent(aliases, "Weathering With You");
+        }
+        if (animeName.contains("孤独摇滚") || animeName.contains("孤獨搖滾")) {
+            addKeywordIfPresent(aliases, "ぼっち・ざ・ろっく！");
+            addKeywordIfPresent(aliases, "Bocchi the Rock!");
+        }
+        if (animeName.contains("莉可丽丝") || animeName.contains("莉可麗絲")) {
+            addKeywordIfPresent(aliases, "リコリス・リコイル");
+            addKeywordIfPresent(aliases, "Lycoris Recoil");
+        }
+        return aliases;
+    }
+
+    private String toTraditionalChineseTitle(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        return value
+                .replace("学园", "學園")
+                .replace("校园", "校園")
+                .replace("偶像", "偶像")
+                .replace("同好会", "同好會")
+                .replace("女主", "女主")
+                .replace("养成", "養成")
+                .replace("方法", "方法")
+                .replace("天气", "天氣")
+                .replace("名字", "名字")
+                .replace("孤独", "孤獨")
+                .replace("摇滚", "搖滾")
+                .replace("莉可丽丝", "莉可麗絲")
+                .replace("命运", "命運")
+                .replace("物语", "物語")
+                .replace("战士", "戰士")
+                .trim();
+    }
+
+    private boolean canDirectConfirmAnimeResult(@Nullable ParsedResult parsedResult) {
+        if (parsedResult == null || parsedResult.animeNames == null || parsedResult.animeNames.isEmpty()) {
+            return false;
+        }
+        return hasReliableAnimeLocation(parsedResult);
+    }
+
+    private boolean hasReliableAnimeLocation(@Nullable ParsedResult parsedResult) {
+        if (parsedResult == null) {
+            return false;
+        }
+        return !isBlank(parsedResult.locationName)
+                && !containsUncertainText(parsedResult.locationName)
+                && (parsedResult.confidence < 0 || parsedResult.confidence >= 0.75);
+    }
+
+    private void selectAnimeCandidateAsCurrentResult(String animeName, ParsedResult parsedResult) {
+        if (isBlank(animeName) || parsedResult == null) {
+            showToast("当前候选结果不完整");
+            return;
+        }
+        runSafelyOnUiThread(() -> {
+            updateLoadingState(false);
+            switchResultMode(ResultMode.OVERSEAS);
+            cardResult.setVisibility(View.VISIBLE);
+            clearAnimeCandidateViews();
+            clearSpotCandidateViews();
+            allowManualAnimeRematch = true;
+            updateManualAnimeRematchVisibility();
+
+            String locationDisplayName = chooseFirstNonBlank(parsedResult.locationName, "地点待确认");
+            String descriptionText = chooseFirstNonBlank(
+                    parsedResult.summary,
+                    "AI 已识别出作品和地点线索，请确认当前结果后保存打卡。"
+            );
+            chipResultState.setText("AI 已识别");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, "待确认"));
+            tvAnimeTitle.setText(animeName);
+            tvLocationName.setVisibility(View.VISIBLE);
+            bindLocationMapEntry(locationDisplayName, locationDisplayName + " \uD83D\uDCCD(点击导航)");
+            tvResultSummary.setText(descriptionText);
+            if (tvDesc != null) {
+                tvDesc.setVisibility(View.VISIBLE);
+                tvDesc.setText(joinLines(
+                        "你已选定作品；如果当前地点正确，请点击“确定此结果”。",
+                        buildResultGuidance(parsedResult, false, false)
+                ));
+            }
+            tvReferenceLabel.setVisibility(View.GONE);
+            if (ivResultReference != null) {
+                ivResultReference.setVisibility(View.GONE);
+            }
+            currentCandidateNames = new ArrayList<>();
+            currentCandidateNames.add(animeName);
+            currentCandidateIndex = 0;
+            currentCandidateLocation = locationDisplayName;
+            currentCandidateDesc = descriptionText;
+            updateCurrentResultSnapshot(animeName, locationDisplayName, descriptionText, null);
+            showWorkInfoSection(buildBasicWorkInfoText(animeName));
+            markAnimeResultPendingConfirmation();
+            updateNextOptionButtonState();
+            updateNavigateButtonState();
+            requestWorkInfoForCurrentResult(animeName, activeSearchGeneration);
+            scrollToView(cardResult);
+        });
+    }
+
+    private void requestWorkInfoForCurrentResult(String animeName, int searchGeneration) {
+        if (isBlank(animeName) || anitabiApiClient == null) {
+            return;
+        }
+        List<String> searchNames = buildWorkInfoSearchNames(animeName);
+        Log.d(DEBUG_TAG, "work info request: displayAnimeName=" + animeName
+                + ", searchNames=" + searchNames
+                + ", generation=" + searchGeneration);
+        requestWorkInfoBySearchNames(animeName, searchNames, 0, searchGeneration);
+    }
+
+    private void requestWorkInfoBySearchNames(
+            String originalAnimeName,
+            List<String> searchNames,
+            int searchIndex,
+            int searchGeneration
+    ) {
+        if (isStaleSearch(searchGeneration) || isBlank(originalAnimeName) || anitabiApiClient == null) {
+            return;
+        }
+        if (searchNames == null || searchIndex >= searchNames.size()) {
+            requestManagementThemeInfoForWork(originalAnimeName, searchGeneration);
+            requestFallbackWorkCover(originalAnimeName, searchGeneration);
+            return;
+        }
+        String searchName = searchNames.get(searchIndex);
+        if (isBlank(searchName)) {
+            requestWorkInfoBySearchNames(originalAnimeName, searchNames, searchIndex + 1, searchGeneration);
+            return;
+        }
+        Log.d(DEBUG_TAG, "work info search: displayAnimeName=" + originalAnimeName
+                + ", searchIndex=" + searchIndex
+                + ", searchName=" + searchName
+                + ", generation=" + searchGeneration);
+        anitabiApiClient.searchBangumiSubjectIdByName(searchName, new AnitabiApiClient.ApiCallback<Integer>() {
+            @Override
+            public void onSuccess(Integer subjectId) {
+                if (isStaleSearch(searchGeneration) || subjectId == null || subjectId <= 0) {
+                    Log.d(DEBUG_TAG, "work info subject search skipped: displayAnimeName=" + originalAnimeName
+                            + ", searchName=" + searchName
+                            + ", subjectId=" + subjectId
+                            + ", stale=" + isStaleSearch(searchGeneration));
+                    return;
+                }
+                Log.d(DEBUG_TAG, "work info subject selected: displayAnimeName=" + originalAnimeName
+                        + ", searchName=" + searchName
+                        + ", subjectId=" + subjectId);
+                anitabiApiClient.getBangumiLite(subjectId, new AnitabiApiClient.ApiCallback<AnitabiApiClient.BangumiLiteResponse>() {
+                    @Override
+                    public void onSuccess(AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
+                        if (isStaleSearch(searchGeneration) || bangumiLiteResponse == null) {
+                            Log.d(DEBUG_TAG, "work info lite skipped: displayAnimeName=" + originalAnimeName
+                                    + ", searchName=" + searchName
+                                    + ", subjectId=" + subjectId
+                                    + ", stale=" + isStaleSearch(searchGeneration)
+                                    + ", isNull=" + (bangumiLiteResponse == null));
+                            return;
+                        }
+                        requestWorkSubjectInfoForCurrentResult(
+                                originalAnimeName,
+                                searchName,
+                                bangumiLiteResponse,
+                                subjectId,
+                                searchGeneration,
+                                searchNames,
+                                searchIndex + 1
+                        );
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        Log.d(DEBUG_TAG, "work info lite unavailable: " + safeMessage(e, "unknown"));
+                        AnitabiApiClient.BangumiLiteResponse liteFallback = new AnitabiApiClient.BangumiLiteResponse();
+                        liteFallback.setId(String.valueOf(subjectId));
+                        requestWorkSubjectInfoForCurrentResult(
+                                originalAnimeName,
+                                searchName,
+                                liteFallback,
+                                subjectId,
+                                searchGeneration,
+                                searchNames,
+                                searchIndex + 1
+                        );
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Log.d(DEBUG_TAG, "work info subject search unavailable for " + searchName + ": " + safeMessage(e, "unknown"));
+                requestWorkInfoBySearchNames(originalAnimeName, searchNames, searchIndex + 1, searchGeneration);
+            }
+        });
+    }
+
+    private void requestManagementThemeInfoForWork(String animeName, int searchGeneration) {
+        if (tourInfoApiClient == null || isBlank(animeName)) {
+            return;
+        }
+        tourInfoApiClient.matchTheme(animeName, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<List<TourThemeMatchResult>>() {
+            @Override
+            public void onSuccess(List<TourThemeMatchResult> data) {
+                if (isStaleSearch(searchGeneration) || data == null || data.isEmpty()) {
+                    return;
+                }
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)) {
+                        return;
+                    }
+                    applyManagementThemeInfoToCurrentResult(data.get(0));
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management work info skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void requestWorkSubjectInfoForCurrentResult(
+            String animeName,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
+            int subjectId,
+            int searchGeneration
+    ) {
+        requestWorkSubjectInfoForCurrentResult(
+                animeName,
+                animeName,
+                bangumiLiteResponse,
+                subjectId,
+                searchGeneration,
+                null,
+                -1
+        );
+    }
+
+    private void requestWorkSubjectInfoForCurrentResult(
+            String animeName,
+            @Nullable String searchName,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
+            int subjectId,
+            int searchGeneration,
+            @Nullable List<String> searchNames,
+            int nextSearchIndex
+    ) {
+        anitabiApiClient.getBangumiSubjectInfo(subjectId, new AnitabiApiClient.ApiCallback<AnitabiApiClient.BangumiSubjectInfo>() {
+            @Override
+            public void onSuccess(AnitabiApiClient.BangumiSubjectInfo subjectInfo) {
+                if (isStaleSearch(searchGeneration)) {
+                    return;
+                }
+                bangumiLiteResponse.applySubjectInfo(subjectInfo);
+                Log.d(DEBUG_TAG, "work subject info loaded: displayAnimeName=" + animeName
+                        + ", searchName=" + searchName
+                        + ", subjectId=" + subjectId
+                        + ", selectedName=" + bangumiLiteResponse.getSubjectName()
+                        + ", selectedNameCn=" + bangumiLiteResponse.getSubjectNameCn()
+                        + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(bangumiLiteResponse)
+                        + ", workImageUrl=" + getBangumiWorkImageUrl(bangumiLiteResponse));
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)
+                        && tryNextWorkInfoSearch(animeName, searchNames, nextSearchIndex, searchGeneration)) {
+                    return;
+                }
+                applyWorkInfoToCurrentResult(animeName, searchName, subjectId, bangumiLiteResponse, searchGeneration);
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)) {
+                    requestManagementThemeInfoForWork(animeName, searchGeneration);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (isStaleSearch(searchGeneration)) {
+                    return;
+                }
+                Log.d(DEBUG_TAG, "work subject info unavailable, use lite info: " + safeMessage(e, "unknown"));
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)
+                        && tryNextWorkInfoSearch(animeName, searchNames, nextSearchIndex, searchGeneration)) {
+                    return;
+                }
+                Log.d(DEBUG_TAG, "work subject info fallback: displayAnimeName=" + animeName
+                        + ", searchName=" + searchName
+                        + ", subjectId=" + subjectId
+                        + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(bangumiLiteResponse)
+                        + ", workImageUrl=" + getBangumiWorkImageUrl(bangumiLiteResponse));
+                applyWorkInfoToCurrentResult(animeName, searchName, subjectId, bangumiLiteResponse, searchGeneration);
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)) {
+                    requestManagementThemeInfoForWork(animeName, searchGeneration);
+                }
+            }
+        });
+    }
+
+    private boolean tryNextWorkInfoSearch(
+            String originalAnimeName,
+            @Nullable List<String> searchNames,
+            int nextSearchIndex,
+            int searchGeneration
+    ) {
+        if (searchNames == null || nextSearchIndex < 0 || nextSearchIndex >= searchNames.size()) {
+            return false;
+        }
+        requestWorkInfoBySearchNames(originalAnimeName, searchNames, nextSearchIndex, searchGeneration);
+        return true;
+    }
+
+    private boolean hasDetailedWorkInfo(@Nullable AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
+        if (bangumiLiteResponse == null) {
+            return false;
+        }
+        return !isBlank(bangumiLiteResponse.getSubjectSummary())
+                || !isBlank(bangumiLiteResponse.getSubjectDate())
+                || (bangumiLiteResponse.getSubjectEps() != null && bangumiLiteResponse.getSubjectEps() > 0)
+                || !isBlank(bangumiLiteResponse.getSubjectPlatform())
+                || parseIntSafely(bangumiLiteResponse.getPointsLength()) > 0;
+    }
+
+    private void applyWorkInfoToCurrentResult(
+            String animeName,
+            @Nullable String searchName,
+            int subjectId,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
+            int searchGeneration
+    ) {
+        runSafelyOnUiThread(() -> {
+            String skipReason = getWorkInfoApplySkipReason(animeName, searchGeneration);
+            if (!isBlank(skipReason)) {
+                Log.d(DEBUG_TAG, "applyWorkInfo skipped: reason=" + skipReason
+                        + ", displayAnimeName=" + animeName
+                        + ", currentAnimeName=" + currentAnimeName
+                        + ", searchName=" + searchName
+                        + ", subjectId=" + subjectId
+                        + ", generation=" + searchGeneration
+                        + ", activeGeneration=" + activeSearchGeneration);
+                return;
+            }
+            String enrichedDescription = appendWorkIntroToDescription(currentDesc, bangumiLiteResponse);
+            String workImageUrl = getBangumiWorkImageUrl(bangumiLiteResponse);
+            Log.d(DEBUG_TAG, "applyWorkInfo: displayAnimeName=" + animeName
+                    + ", currentAnimeName=" + currentAnimeName
+                    + ", searchName=" + searchName
+                    + ", subjectId=" + subjectId
+                    + ", selectedName=" + (bangumiLiteResponse != null ? bangumiLiteResponse.getSubjectName() : null)
+                    + ", selectedNameCn=" + (bangumiLiteResponse != null ? bangumiLiteResponse.getSubjectNameCn() : null)
+                    + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(bangumiLiteResponse)
+                    + ", workImageUrl=" + workImageUrl);
+            showWorkInfoSection(buildWorkInfoSectionText(animeName, bangumiLiteResponse));
+            boolean showedWorkCover = showWorkCoverImage(workImageUrl);
+            if (!isBlank(enrichedDescription) && !enrichedDescription.equals(currentDesc)) {
+                currentDesc = enrichedDescription;
+                tvResultSummary.setText(enrichedDescription);
+                if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+                    confirmedDescription = enrichedDescription;
+                }
+            }
+            boolean showedReferenceImage = showWorkImageIfPresent(workImageUrl);
+            if (showedWorkCover || showedReferenceImage) {
+                currentReferenceUrl = workImageUrl;
+                if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+                    confirmedReferenceUrl = workImageUrl;
+                }
+            } else {
+                requestFallbackWorkCover(animeName, searchName, searchGeneration);
+            }
+        });
+    }
+
+    private void requestFallbackWorkCover(String animeName, int searchGeneration) {
+        requestFallbackWorkCover(animeName, animeName, searchGeneration);
+    }
+
+    private void requestFallbackWorkCover(String animeName, @Nullable String searchName, int searchGeneration) {
+        if (isBlank(animeName) || serpApiClient == null) {
+            return;
+        }
+        String coverSearchName = chooseFirstNonBlank(searchName, animeName);
+        Log.d(DEBUG_TAG, "work cover fallback request: displayAnimeName=" + animeName
+                + ", searchName=" + coverSearchName
+                + ", generation=" + searchGeneration);
+        serpApiClient.fetchImageByQuery(coverSearchName + " 动画 作品 封面", new SerpApiClient.Callback() {
+            @Override
+            public void onSuccess(String imageUrl) {
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)
+                            || currentResultMode != ResultMode.OVERSEAS
+                            || !isSameWorkTitleForCurrentResult(currentAnimeName, animeName)) {
+                        Log.d(DEBUG_TAG, "work cover fallback skipped: displayAnimeName=" + animeName
+                                + ", currentAnimeName=" + currentAnimeName
+                                + ", searchName=" + coverSearchName
+                                + ", imageUrl=" + imageUrl
+                                + ", stale=" + isStaleSearch(searchGeneration));
+                        return;
+                    }
+                    boolean showedWorkCover = showWorkCoverImage(imageUrl);
+                    boolean showedReferenceImage = showWorkImageIfPresent(imageUrl);
+                    Log.d(DEBUG_TAG, "work cover fallback result: displayAnimeName=" + animeName
+                            + ", searchName=" + coverSearchName
+                            + ", hasImageUrl=" + !isBlank(imageUrl)
+                            + ", showedWorkCover=" + showedWorkCover
+                            + ", showedReferenceImage=" + showedReferenceImage);
+                    if (showedWorkCover || showedReferenceImage) {
+                        currentReferenceUrl = imageUrl;
+                        if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+                            confirmedReferenceUrl = imageUrl;
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Log.d(DEBUG_TAG, "work cover fallback unavailable: displayAnimeName=" + animeName
+                        + ", searchName=" + coverSearchName
+                        + ", reason=" + safeMessage(e, "unknown"));
+            }
+        });
+    }
+
+    private String getWorkInfoApplySkipReason(String displayAnimeName, int searchGeneration) {
+        if (isStaleSearch(searchGeneration)) {
+            return "stale search";
+        }
+        if (currentResultMode != ResultMode.OVERSEAS) {
+            return "result mode is " + currentResultMode;
+        }
+        if (isBlank(currentAnimeName)) {
+            return "current anime name is blank";
+        }
+        if (!isSameWorkTitleForCurrentResult(currentAnimeName, displayAnimeName)) {
+            return "display name no longer current";
+        }
+        return "";
+    }
+
+    private boolean isSameWorkTitleForCurrentResult(@Nullable String currentName, @Nullable String expectedName) {
+        if (isBlank(currentName) || isBlank(expectedName)) {
+            return false;
+        }
+        if (currentName.equals(expectedName)) {
+            return true;
+        }
+        String normalizedCurrent = normalizeWorkTitleForCurrentResult(currentName);
+        String normalizedExpected = normalizeWorkTitleForCurrentResult(expectedName);
+        return !isBlank(normalizedCurrent) && normalizedCurrent.equals(normalizedExpected);
+    }
+
+    private String normalizeWorkTitleForCurrentResult(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .toLowerCase(Locale.ROOT)
+                .replace("學園", "学园")
+                .replace("校园", "学园")
+                .replace("同好會", "同好会")
+                .replace("！", "!")
+                .replace("　", "")
+                .replaceAll("[\\s\\p{Punct}《》「」『』【】（）()\\[\\]·・]+", "")
+                .trim();
+    }
+
+    private String safeMessage(Exception exception, String fallback) {
+        if (exception == null || isBlank(exception.getMessage())) {
+            return fallback;
+        }
+        return exception.getMessage();
     }
 
     private void clearAnimeCandidateViews() {
@@ -2055,7 +2741,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.e(TAG, "Failed to get points detail", e);
                     if (currentIdentifyMode == IdentifyMode.ANIME) {
                         updateLoadingState(false);
-                        renderNoSpotCandidates(parsedResult);
+                        renderNoSpotCandidates(parsedResult, bangumiLiteResponse);
                         return;
                     }
                     String fallbackAnimeName = getCurrentCandidateName(parsedResult.animeTitle);
@@ -2175,14 +2861,7 @@ public class MainActivity extends AppCompatActivity {
             tvLocationName.setVisibility(View.VISIBLE);
             bindLocationMapEntry(locationDisplayName, locationDisplayName + " \uD83D\uDCCD(点击导航)");
             tvResultSummary.setText(description != null ? description : DEFAULT_RESULT_HINT);
-            tvReferenceLabel.setVisibility(View.VISIBLE);
-            if (ivResultReference != null) {
-                ivResultReference.setVisibility(View.VISIBLE);
-                Glide.with(MainActivity.this)
-                        .load(imageUrl)
-                        .centerCrop()
-                        .into(ivResultReference);
-            }
+            showResultReferenceImage(imageUrl, getString(R.string.label_reference_frame));
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(buildNavigationHint("专业巡礼图库暂无截图，当前展示全网智能检索到的参考图"));
@@ -2212,10 +2891,8 @@ public class MainActivity extends AppCompatActivity {
             tvLocationName.setVisibility(View.VISIBLE);
             bindLocationMapEntry(safeLocationName, safeLocationName + " \uD83D\uDCCD(点击导航)");
             tvResultSummary.setText(description != null ? description : DEFAULT_RESULT_HINT);
-            tvReferenceLabel.setVisibility(View.GONE);
-            if (ivResultReference != null) {
-                ivResultReference.setVisibility(View.GONE);
-            }
+            hideResultReferenceImage();
+            showWorkInfoSection(buildBasicWorkInfoText(animeName));
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(buildNavigationHint("第三方巡礼数据库暂无截图，当前可直接打开地图前往现场"));
@@ -2223,6 +2900,7 @@ public class MainActivity extends AppCompatActivity {
             updateNextOptionButtonState();
             updateNavigateButtonState();
             updateCurrentResultSnapshot(animeName, safeLocationName, description, null);
+            requestFallbackWorkCover(animeName, activeSearchGeneration);
             setConfirmedPilgrimageSelection(
                     animeName,
                     safeLocationName,
@@ -2266,7 +2944,10 @@ public class MainActivity extends AppCompatActivity {
             }
             String descriptionText = buildResultText(parsedResult, bangumiLiteResponse, firstPoint, hasMultiplePoints);
             String locationDisplayText = locationDisplayName + " \uD83D\uDCCD(点击导航)";
-            String pointImageUrl = AnitabiApiClient.getHighResImageUrl(firstPoint.getImage());
+            String pointImageUrl = chooseFirstNonBlank(
+                    AnitabiApiClient.getHighResImageUrl(firstPoint.getImage()),
+                    getBangumiWorkImageUrl(bangumiLiteResponse)
+            );
 
             chipResultState.setText("AI 识别成功");
             chipConfidence.setText("原片精准匹配");
@@ -2274,6 +2955,8 @@ public class MainActivity extends AppCompatActivity {
             tvLocationName.setVisibility(View.VISIBLE);
             bindLocationMapEntry(locationDisplayName, locationDisplayText);
             tvResultSummary.setText(descriptionText);
+            showWorkInfoSection(buildWorkInfoSectionText(animeDisplayName, bangumiLiteResponse));
+            showWorkCoverImage(getBangumiWorkImageUrl(bangumiLiteResponse));
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(buildNavigationHint(
@@ -2299,16 +2982,10 @@ public class MainActivity extends AppCompatActivity {
             updateNextOptionButtonState();
             updateNavigateButtonState();
 
-            if (!isBlank(pointImageUrl)) {
-                tvReferenceLabel.setVisibility(View.VISIBLE);
-                ivResultReference.setVisibility(View.VISIBLE);
-                Glide.with(this)
-                        .load(pointImageUrl)
-                        .centerCrop()
-                        .into(ivResultReference);
-            } else {
-                tvReferenceLabel.setVisibility(View.GONE);
-                ivResultReference.setVisibility(View.GONE);
+            if (!showResultReferenceImage(pointImageUrl,
+                    isBlank(firstPoint.getImage()) ? "作品图片" : getString(R.string.label_reference_frame))) {
+                hideResultReferenceImage();
+                requestFallbackWorkCover(animeDisplayName, activeSearchGeneration);
             }
         });
     }
@@ -2344,10 +3021,13 @@ public class MainActivity extends AppCompatActivity {
                     "AI 已结合指定作品和当前图片重新提取地点线索，请从下方其他可能的巡礼地点中确认。"
             );
             descriptionText = appendWorkIntroToDescription(descriptionText, bangumiLiteResponse);
+            String workImageUrl = getBangumiWorkImageUrl(bangumiLiteResponse);
             tvAnimeTitle.setText(animeDisplayName);
             tvLocationName.setVisibility(View.VISIBLE);
             tvLocationName.setText(locationDisplayName);
             tvResultSummary.setText(descriptionText);
+            showWorkInfoSection(buildWorkInfoSectionText(animeDisplayName, bangumiLiteResponse));
+            showWorkCoverImage(workImageUrl);
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(joinLines(
@@ -2358,15 +3038,18 @@ public class MainActivity extends AppCompatActivity {
             }
             tvReferenceLabel.setVisibility(View.GONE);
             if (ivResultReference != null) {
-                ivResultReference.setVisibility(View.GONE);
+                if (!showWorkImageIfPresent(workImageUrl)) {
+                    hideResultReferenceImage();
+                    requestFallbackWorkCover(animeDisplayName, activeSearchGeneration);
+                }
             }
-            updateCurrentResultSnapshot(animeDisplayName, locationDisplayName, descriptionText, null);
+            updateCurrentResultSnapshot(animeDisplayName, locationDisplayName, descriptionText, workImageUrl);
             setConfirmedPilgrimageSelection(
                     animeDisplayName,
                     locationDisplayName,
                     locationDisplayName,
                     descriptionText,
-                    null
+                    workImageUrl
             );
             if (hasSpotCandidateOptions) {
                 renderSpotCandidateList(parsedResult, bangumiLiteResponse, sortedCandidates, pointDetails.size());
@@ -2381,26 +3064,63 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderNoSpotCandidates(ParsedResult parsedResult) {
+        renderNoSpotCandidates(parsedResult, null);
+    }
+
+    private void renderNoSpotCandidates(
+            ParsedResult parsedResult,
+            @Nullable AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse
+    ) {
         runSafelyOnUiThread(() -> {
             updateLoadingState(false);
             switchResultMode(ResultMode.OVERSEAS);
             cardResult.setVisibility(View.VISIBLE);
             allowManualAnimeRematch = true;
             updateManualAnimeRematchVisibility();
-            chipResultState.setText("未找到可靠巡礼点");
-            chipConfidence.setText(buildResultQualityLabel(parsedResult, "需要补充作品名"));
-            tvAnimeTitle.setText(chooseFirstNonBlank(parsedResult.animeTitle, getCurrentCandidateName("作品待确认")));
+            boolean canConfirmAiResult = hasReliableAnimeLocation(parsedResult)
+                    || (!isBlank(parsedResult.animeTitle) && !isBlank(parsedResult.locationName));
+            chipResultState.setText(canConfirmAiResult ? "AI 已识别，待确认地点" : "需要补充地点线索");
+            chipConfidence.setText(buildResultQualityLabel(parsedResult, canConfirmAiResult ? "待确认" : "需要补充作品名"));
+            String animeDisplayName = chooseFirstNonBlank(parsedResult.animeTitle, getCurrentCandidateName("作品待确认"));
+            String locationDisplayName = chooseFirstNonBlank(parsedResult.locationName, "地点待确认");
+            String descriptionText = canConfirmAiResult
+                    ? chooseFirstNonBlank(parsedResult.summary, "AI 已识别出作品和地点线索，请确认当前结果后保存打卡。")
+                    : "该作品暂未找到巡礼地点，可尝试更换作品名或补充更具体地点。";
+            descriptionText = appendWorkIntroToDescription(descriptionText, bangumiLiteResponse);
+            tvAnimeTitle.setText(animeDisplayName);
             tvLocationName.setVisibility(View.VISIBLE);
-            tvLocationName.setText(chooseFirstNonBlank(parsedResult.locationName, "地点待确认"));
-            tvResultSummary.setText("该作品暂未找到巡礼地点，可尝试更换作品名或补充更具体地点。");
+            if (canConfirmAiResult) {
+                bindLocationMapEntry(locationDisplayName, locationDisplayName + " \uD83D\uDCCD(点击导航)");
+            } else {
+                tvLocationName.setText(locationDisplayName);
+                clearLocationMapEntry();
+            }
+            tvResultSummary.setText(descriptionText);
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(joinLines(
+                        canConfirmAiResult
+                                ? "点位库暂未命中，但 AI 已给出较明确结果；如果页面结果正确，请点击“确定此结果”。"
+                                : "",
                         buildRematchKeywordSummary(parsedResult),
-                        buildResultGuidance(parsedResult, false, true)
+                        buildResultGuidance(parsedResult, false, !canConfirmAiResult)
                 ));
             }
             clearSpotCandidateViews();
+            String workImageUrl = getBangumiWorkImageUrl(bangumiLiteResponse);
+            showWorkInfoSection(buildWorkInfoSectionText(animeDisplayName, bangumiLiteResponse));
+            showWorkCoverImage(workImageUrl);
+            updateCurrentResultSnapshot(animeDisplayName, locationDisplayName, descriptionText, workImageUrl);
+            if (canConfirmAiResult) {
+                requestWorkInfoForCurrentResult(animeDisplayName, activeSearchGeneration);
+                if (!showWorkImageIfPresent(workImageUrl)) {
+                    requestFallbackWorkCover(animeDisplayName, activeSearchGeneration);
+                }
+                markAnimeResultPendingConfirmation();
+            } else {
+                hideResultReferenceImage();
+                clearAnimeResultPendingConfirmation();
+            }
             updateNextOptionButtonState();
             updateNavigateButtonState();
             updateNextStepHint();
@@ -2469,6 +3189,104 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private String getBangumiWorkImageUrl(@Nullable AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
+        if (bangumiLiteResponse == null) {
+            return "";
+        }
+        return AnitabiApiClient.getHighResImageUrl(bangumiLiteResponse.getCover());
+    }
+
+    private boolean showWorkImageIfPresent(String imageUrl) {
+        return showResultReferenceImage(imageUrl, "作品图片");
+    }
+
+    private boolean showResultReferenceImage(String imageUrl, String label) {
+        if (isBlank(imageUrl) || ivResultReference == null || tvReferenceLabel == null) {
+            return false;
+        }
+        tvReferenceLabel.setText(chooseFirstNonBlank(label, getString(R.string.label_reference_frame)));
+        tvReferenceLabel.setVisibility(View.VISIBLE);
+        ivResultReference.setVisibility(View.VISIBLE);
+        Glide.with(this)
+                .load(imageUrl)
+                .centerCrop()
+                .into(ivResultReference);
+        return true;
+    }
+
+    private void hideResultReferenceImage() {
+        if (tvReferenceLabel != null) {
+            tvReferenceLabel.setText(getString(R.string.label_reference_frame));
+            tvReferenceLabel.setVisibility(View.GONE);
+        }
+        if (ivResultReference != null) {
+            ivResultReference.setVisibility(View.GONE);
+        }
+    }
+
+    private void showWorkInfoSection(String workInfoText) {
+        if (layoutWorkInfo == null || tvWorkInfo == null || isBlank(workInfoText)) {
+            return;
+        }
+        tvWorkInfo.setText(workInfoText);
+        layoutWorkInfo.setVisibility(currentResultMode == ResultMode.OVERSEAS ? View.VISIBLE : View.GONE);
+    }
+
+    private boolean showWorkCoverImage(String imageUrl) {
+        if (isBlank(imageUrl) || ivWorkCover == null || layoutWorkInfo == null) {
+            return false;
+        }
+        layoutWorkInfo.setVisibility(currentResultMode == ResultMode.OVERSEAS ? View.VISIBLE : View.GONE);
+        ivWorkCover.setVisibility(View.VISIBLE);
+        Glide.with(this)
+                .load(imageUrl)
+                .centerCrop()
+                .into(ivWorkCover);
+        return true;
+    }
+
+    private void hideWorkInfoSection() {
+        if (layoutWorkInfo != null) {
+            layoutWorkInfo.setVisibility(View.GONE);
+        }
+        if (tvWorkInfo != null) {
+            tvWorkInfo.setText("");
+        }
+        if (ivWorkCover != null) {
+            ivWorkCover.setVisibility(View.GONE);
+            ivWorkCover.setImageDrawable(null);
+        }
+    }
+
+    private void showBackendCostSection(String costText) {
+        if (layoutBackendCost == null || tvBackendCost == null || isBlank(costText)) {
+            return;
+        }
+        tvBackendCost.setText(removeCostTitle(costText));
+        layoutBackendCost.setVisibility(View.VISIBLE);
+        scrollToView(layoutBackendCost);
+    }
+
+    private void hideBackendCostSection() {
+        if (layoutBackendCost != null) {
+            layoutBackendCost.setVisibility(View.GONE);
+        }
+        if (tvBackendCost != null) {
+            tvBackendCost.setText("");
+        }
+    }
+
+    private String removeCostTitle(String costText) {
+        if (isBlank(costText)) {
+            return "";
+        }
+        String normalized = costText.trim();
+        if (normalized.startsWith("本次估算成本")) {
+            return normalized.substring("本次估算成本".length()).trim();
+        }
+        return normalized;
+    }
+
     private void renderSelectedSpotResult(
             ParsedResult parsedResult,
             AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
@@ -2499,7 +3317,10 @@ public class MainActivity extends AppCompatActivity {
                     "巡礼地点待进一步确认"
             );
             String descriptionText = buildResultText(parsedResult, bangumiLiteResponse, selectedPoint, hasMultiplePoints);
-            String pointImageUrl = AnitabiApiClient.getHighResImageUrl(selectedPoint.getImage());
+            String pointImageUrl = chooseFirstNonBlank(
+                    AnitabiApiClient.getHighResImageUrl(selectedPoint.getImage()),
+                    getBangumiWorkImageUrl(bangumiLiteResponse)
+            );
 
             chipResultState.setText("圣地巡礼");
             chipConfidence.setText("已选择地点");
@@ -2507,6 +3328,7 @@ public class MainActivity extends AppCompatActivity {
             tvLocationName.setVisibility(View.VISIBLE);
             bindLocationMapEntry(locationDisplayName, locationDisplayName + " \uD83D\uDCCD(点击导航)");
             tvResultSummary.setText(descriptionText);
+            showWorkInfoSection(buildWorkInfoSectionText(animeDisplayName, bangumiLiteResponse));
             if (tvDesc != null) {
                 tvDesc.setVisibility(View.VISIBLE);
                 tvDesc.setText(joinLines(
@@ -2530,16 +3352,10 @@ public class MainActivity extends AppCompatActivity {
             updateNextStepHint();
             scrollToView(cardResult);
 
-            if (!isBlank(pointImageUrl)) {
-                tvReferenceLabel.setVisibility(View.VISIBLE);
-                ivResultReference.setVisibility(View.VISIBLE);
-                Glide.with(this)
-                        .load(pointImageUrl)
-                        .centerCrop()
-                        .into(ivResultReference);
-            } else {
-                tvReferenceLabel.setVisibility(View.GONE);
-                ivResultReference.setVisibility(View.GONE);
+            if (!showResultReferenceImage(pointImageUrl,
+                    isBlank(selectedPoint.getImage()) ? "作品图片" : getString(R.string.label_reference_frame))) {
+                hideResultReferenceImage();
+                requestFallbackWorkCover(animeDisplayName, activeSearchGeneration);
             }
         });
     }
@@ -2827,17 +3643,13 @@ public class MainActivity extends AppCompatActivity {
                 tvDesc.setText(buildNavigationHint("已匹配到作品，但详细巡礼点尚未返回，当前展示第一条基础地标。"));
             }
 
-            String liteImageUrl = AnitabiApiClient.getHighResImageUrl(firstLitePoint.getImage());
-            if (!isBlank(liteImageUrl)) {
-                tvReferenceLabel.setVisibility(View.VISIBLE);
-                ivResultReference.setVisibility(View.VISIBLE);
-                Glide.with(this)
-                        .load(liteImageUrl)
-                        .centerCrop()
-                        .into(ivResultReference);
-            } else {
-                tvReferenceLabel.setVisibility(View.GONE);
-                ivResultReference.setVisibility(View.GONE);
+            String liteImageUrl = chooseFirstNonBlank(
+                    AnitabiApiClient.getHighResImageUrl(firstLitePoint.getImage()),
+                    getBangumiWorkImageUrl(bangumiLiteResponse)
+            );
+            if (!showResultReferenceImage(liteImageUrl,
+                    isBlank(firstLitePoint.getImage()) ? "作品图片" : getString(R.string.label_reference_frame))) {
+                hideResultReferenceImage();
             }
 
             updateCurrentResultSnapshot(
@@ -2946,8 +3758,11 @@ public class MainActivity extends AppCompatActivity {
         if (tvDomesticIntro != null) {
             tvDomesticIntro.setText("");
         }
+        hideWorkInfoSection();
+        hideBackendCostSection();
         clearAnimeCandidateViews();
         clearSpotCandidateViews();
+        clearAnimeResultPendingConfirmation();
         updateSaveRecordButtonState();
         updateNavigateButtonState();
         updateNextStepHint();
@@ -2975,8 +3790,11 @@ public class MainActivity extends AppCompatActivity {
         if (tvDomesticIntro != null) {
             tvDomesticIntro.setText("");
         }
+        hideWorkInfoSection();
+        hideBackendCostSection();
         clearAnimeCandidateViews();
         clearSpotCandidateViews();
+        clearAnimeResultPendingConfirmation();
         hideNextStepHint();
     }
 
@@ -3617,6 +4435,9 @@ public class MainActivity extends AppCompatActivity {
         if (btnSaveRecord != null) {
             btnSaveRecord.setBackgroundTintList(ColorStateList.valueOf(primaryColor));
         }
+        if (btnConfirmAnimeResult != null) {
+            btnConfirmAnimeResult.setBackgroundTintList(ColorStateList.valueOf(primaryColor));
+        }
         if (btnNextOption != null) {
             btnNextOption.setTextColor(subtleTextColor);
             btnNextOption.setBackgroundTintList(ColorStateList.valueOf(subtleBackgroundColor));
@@ -3643,6 +4464,9 @@ public class MainActivity extends AppCompatActivity {
         if (layoutDomesticContent != null) {
             layoutDomesticContent.setVisibility(resultMode == ResultMode.DOMESTIC ? View.VISIBLE : View.GONE);
         }
+        if (layoutWorkInfo != null && resultMode != ResultMode.OVERSEAS) {
+            layoutWorkInfo.setVisibility(View.GONE);
+        }
         if (tvCommentaryLabel != null) {
             tvCommentaryLabel.setVisibility(resultMode == ResultMode.OVERSEAS ? View.VISIBLE : View.GONE);
         }
@@ -3652,6 +4476,7 @@ public class MainActivity extends AppCompatActivity {
                     : View.GONE);
         }
         updateManualAnimeRematchVisibility();
+        updateConfirmAnimeResultButtonState();
         updateNavigateButtonState();
         updateNextOptionButtonState();
     }
@@ -3863,6 +4688,9 @@ public class MainActivity extends AppCompatActivity {
         if (parsedResult == null) {
             return false;
         }
+        if (parsedResult.confidence >= 0.75) {
+            return false;
+        }
         if (parsedResult.confidence >= 0 && parsedResult.confidence < 0.55) {
             return true;
         }
@@ -3911,6 +4739,41 @@ public class MainActivity extends AppCompatActivity {
         appendManagementSupplementToDescription(lastManagementSupplementText);
     }
 
+    private void markAnimeResultPendingConfirmation() {
+        pendingAnimeResultConfirmation = true;
+        updateConfirmAnimeResultButtonState();
+        updateSaveRecordButtonState();
+        updateNextStepHint();
+    }
+
+    private void clearAnimeResultPendingConfirmation() {
+        pendingAnimeResultConfirmation = false;
+        updateConfirmAnimeResultButtonState();
+        updateNextStepHint();
+    }
+
+    private void confirmCurrentAnimeResult() {
+        String animeName = chooseFirstNonBlank(currentAnimeName, confirmedAnimeName);
+        String locationName = chooseFirstNonBlank(currentLocation, confirmedLocationName, confirmedSpotName);
+        String description = chooseFirstNonBlank(currentDesc, confirmedDescription, "AI 已识别当前巡礼结果。");
+        String referenceUrl = chooseFirstNonBlank(currentReferenceUrl, confirmedReferenceUrl);
+        if (isBlank(animeName) && isBlank(locationName)) {
+            showToast("当前没有可确认的巡礼结果");
+            return;
+        }
+        setConfirmedPilgrimageSelection(
+                animeName,
+                locationName,
+                locationName,
+                description,
+                referenceUrl
+        );
+        chipResultState.setText("已确认结果");
+        chipConfidence.setText("可以保存打卡");
+        updateNextStepHint();
+        showToast("已确认当前结果，可以保存打卡");
+    }
+
     private void setConfirmedPilgrimageSelection(
             String animeName,
             String spotName,
@@ -3925,8 +4788,10 @@ public class MainActivity extends AppCompatActivity {
         confirmedReferenceUrl = referenceImageUrl;
         confirmedLocalImageUri = selectedImageUri != null ? selectedImageUri.toString() : null;
         hasSavedCurrentRecord = false;
+        pendingAnimeResultConfirmation = false;
         Log.d(DEBUG_TAG, "confirmedAnimeName=" + confirmedAnimeName);
         Log.d(DEBUG_TAG, "confirmedSpotName=" + confirmedSpotName);
+        updateConfirmAnimeResultButtonState();
         updateSaveRecordButtonState();
     }
 
@@ -3937,6 +4802,8 @@ public class MainActivity extends AppCompatActivity {
         confirmedDescription = null;
         confirmedReferenceUrl = null;
         confirmedLocalImageUri = null;
+        pendingAnimeResultConfirmation = false;
+        updateConfirmAnimeResultButtonState();
         updateSaveRecordButtonState();
     }
 
@@ -4001,6 +4868,17 @@ public class MainActivity extends AppCompatActivity {
         updateNextStepHint();
     }
 
+    private void updateConfirmAnimeResultButtonState() {
+        if (btnConfirmAnimeResult == null) {
+            return;
+        }
+        boolean canConfirm = currentResultMode == ResultMode.OVERSEAS
+                && pendingAnimeResultConfirmation
+                && (!isBlank(currentAnimeName) || !isBlank(currentLocation));
+        btnConfirmAnimeResult.setVisibility(canConfirm ? View.VISIBLE : View.GONE);
+        btnConfirmAnimeResult.setEnabled(canConfirm);
+    }
+
     private void updateNavigateButtonState() {
         if (btnNavigateSpot == null) {
             return;
@@ -4048,6 +4926,12 @@ public class MainActivity extends AppCompatActivity {
                         : "结果不够确定，建议重新上传更清晰图片或切换识别模式。";
             }
             return "结果较明确，可以保存打卡；需要路线时可点击导航。";
+        }
+        if (!isBlank(confirmedAnimeName) || !isBlank(confirmedLocationName) || !isBlank(confirmedSpotName)) {
+            return "已确认当前结果，可以保存打卡。";
+        }
+        if (pendingAnimeResultConfirmation) {
+            return "AI 已识别当前作品和地点；如果结果正确，请点击“确定此结果”。";
         }
         if (spotCandidateListExpanded) {
             return "从候选中选择更匹配的地点，或收起候选回到当前主结果。";
@@ -4176,6 +5060,7 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     setManagementSupplement(supplement);
+                    applyManagementThemeInfoToCurrentResult(theme);
                 });
             }
 
@@ -4355,7 +5240,7 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 String costText = buildManagementCostSupplement(data);
-                runSafelyOnUiThread(() -> addManagementSupplementSection(costText));
+                runSafelyOnUiThread(() -> showBackendCostSection(costText));
             }
 
             @Override
@@ -4404,6 +5289,35 @@ public class MainActivity extends AppCompatActivity {
                 "匹配主题：" + chooseFirstNonBlank(theme.getThemeName(), "未命名主题"),
                 "主题类型：" + chooseFirstNonBlank(theme.getThemeType(), "未配置"),
                 isBlank(theme.getDescription()) ? "" : "作品介绍：" + theme.getDescription()
+        );
+    }
+
+    private void applyManagementThemeInfoToCurrentResult(@Nullable TourThemeMatchResult theme) {
+        if (theme == null || currentResultMode != ResultMode.OVERSEAS) {
+            return;
+        }
+        String workInfo = buildManagementWorkInfoText(theme);
+        if (!isBlank(workInfo)) {
+            showWorkInfoSection(workInfo);
+        }
+        String coverUrl = theme.getCoverUrl();
+        showWorkCoverImage(coverUrl);
+        if (showWorkImageIfPresent(coverUrl)) {
+            currentReferenceUrl = coverUrl;
+            if (!isBlank(confirmedAnimeName)) {
+                confirmedReferenceUrl = coverUrl;
+            }
+        }
+    }
+
+    private String buildManagementWorkInfoText(TourThemeMatchResult theme) {
+        if (theme == null) {
+            return "";
+        }
+        return joinLines(
+                isBlank(theme.getThemeName()) ? "" : "作品名：" + theme.getThemeName(),
+                isBlank(theme.getThemeType()) ? "" : "类型：" + theme.getThemeType(),
+                isBlank(theme.getDescription()) ? "" : "简介：" + theme.getDescription()
         );
     }
 
@@ -4782,12 +5696,6 @@ public class MainActivity extends AppCompatActivity {
             lines.add("");
             lines.add("场景解读：" + parsedResult.summary);
         }
-        String workIntroText = buildWorkIntroText(bangumiLiteResponse);
-        if (!isBlank(workIntroText)) {
-            lines.add("");
-            lines.add("作品介绍");
-            lines.add(workIntroText);
-        }
         return joinLines(lines);
     }
 
@@ -4795,15 +5703,27 @@ public class MainActivity extends AppCompatActivity {
             String description,
             AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse
     ) {
+        return description;
+    }
+
+    private String buildWorkInfoSectionText(
+            String selectedAnimeName,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse
+    ) {
         String workIntroText = buildWorkIntroText(bangumiLiteResponse);
-        if (isBlank(workIntroText)) {
-            return description;
+        if (!isBlank(workIntroText)) {
+            return workIntroText;
+        }
+        return buildBasicWorkInfoText(selectedAnimeName);
+    }
+
+    private String buildBasicWorkInfoText(String animeName) {
+        if (isBlank(animeName)) {
+            return "";
         }
         return joinLines(
-                chooseFirstNonBlank(description, DEFAULT_RESULT_HINT),
-                "",
-                "作品介绍",
-                workIntroText
+                "作品名：" + animeName,
+                "暂未拿到完整作品资料；已先使用该作品名作为当前巡礼匹配约束。"
         );
     }
 

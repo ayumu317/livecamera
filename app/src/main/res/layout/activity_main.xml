@@ -132,7 +132,7 @@
                         android:layout_height="0dp"
                         android:background="@color/image_placeholder"
                         android:contentDescription="@string/cd_preview_image"
-                        android:scaleType="fitCenter"
+                        android:scaleType="centerCrop"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
@@ -470,10 +470,60 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/layoutWorkInfo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingTop="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="16dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvWorkInfoTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:text="作品信息"
+                            android:textColor="@color/text_primary"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <com.google.android.material.imageview.ShapeableImageView
+                            android:id="@+id/iv_work_cover"
+                            android:layout_width="match_parent"
+                            android:layout_height="190dp"
+                            android:layout_marginTop="12dp"
+                            android:background="@color/image_placeholder"
+                            android:contentDescription="作品图片"
+                            android:scaleType="centerCrop"
+                            android:visibility="gone"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+                            tools:ignore="HardcodedText"
+                            tools:src="@android:drawable/screen_background_light_transparent" />
+
+                        <TextView
+                            android:id="@+id/tvWorkInfo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:breakStrategy="high_quality"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="5dp"
+                            android:textColor="@color/text_body"
+                            android:textSize="15sp"
+                            tools:text="中文名：LoveLive! 虹咲学园学园偶像同好会&#10;原名：ラブライブ！虹ヶ咲学園スクールアイドル同好会&#10;类型：TV&#10;简介：作品简介会显示在这里。" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/layoutOverseasContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
+                        android:layout_marginTop="14dp"
                         android:background="@drawable/bg_overseas_film"
                         android:elevation="4dp"
                         android:orientation="horizontal"
@@ -596,7 +646,7 @@
                                 android:includeFontPadding="false"
                                 android:text="@string/label_ai_commentary"
                                 android:textColor="#FFBE82"
-                                android:textSize="12sp"
+                                android:textSize="11sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -608,8 +658,8 @@
                                 android:hyphenationFrequency="normal"
                                 android:lineSpacingExtra="6dp"
                                 android:text="@string/result_summary_placeholder"
-                                android:textColor="#E7EBF3"
-                                android:textSize="15sp"
+                                android:textColor="#C6CDD9"
+                                android:textSize="13sp"
                                 tools:text="AI 解说占位：这里可能出现较长的巡礼导览内容，例如该镜头对应的集数、剧情上下文、取景角度、建议打卡站位与时间段。文本需要自然换行，并且依赖外层 NestedScrollView 承载长内容，而不是把卡片内部撑坏。" />
 
                             <TextView
@@ -620,7 +670,7 @@
                                 android:breakStrategy="high_quality"
                                 android:lineSpacingExtra="5dp"
                                 android:textColor="#A7AFBF"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:visibility="gone"
                                 tools:text="补充信息：例如截图时间点、Anitabi 收录地标数、路线提示等。" />
                         </LinearLayout>
@@ -768,6 +818,42 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/layoutBackendCost"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingTop="14dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="14dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvBackendCostTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:text="后台计费"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvBackendCost"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="4dp"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            tools:text="AI 模型：0.0028 CNY&#10;地图服务：0.0000 CNY&#10;其他接口：0.0000 CNY&#10;合计：0.0028 CNY" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/layoutResultActions"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -792,6 +878,24 @@
                             app:backgroundTint="@color/brand_primary"
                             app:cornerRadius="18dp"
                             app:rippleColor="@color/cta_ripple" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnConfirmAnimeResult"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:minHeight="48dp"
+                            android:text="确定此结果"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            app:backgroundTint="@color/brand_primary"
+                            app:cornerRadius="18dp"
+                            app:rippleColor="@color/cta_ripple"
+                            tools:ignore="HardcodedText" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnNextOption"
