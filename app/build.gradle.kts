@@ -43,7 +43,7 @@ android {
         buildConfigField("String", "DOUBAO_API_KEY", "\"${buildConfigString("DOUBAO_API_KEY")}\"")
         buildConfigField("String", "DOUBAO_MODEL", "\"${buildConfigString("DOUBAO_MODEL")}\"")
         buildConfigField("String", "NGROK_BASE_URL", "\"${buildConfigString("NGROK_BASE_URL")}\"")
-        buildConfigField("String", "MANAGEMENT_BASE_URL", "\"${buildConfigString("MANAGEMENT_BASE_URL", "http://10.18.117.136:5000")}\"")
+        buildConfigField("String", "MANAGEMENT_BASE_URL", "\"${buildConfigString("MANAGEMENT_BASE_URL", "https://backend-production-d4a53.up.railway.app")}\"")
         buildConfigField("String", "SERPAPI_KEY", "\"${buildConfigString("SERPAPI_KEY")}\"")
         buildConfigField("String", "TENCENT_MAP_SDK_KEY", "\"${buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")}\"")
         manifestPlaceholders["TencentMapSDK_KEY"] = buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")

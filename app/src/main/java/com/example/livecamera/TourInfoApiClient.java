@@ -490,7 +490,8 @@ public class TourInfoApiClient {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (Response closeable = response) {
                     if (!closeable.isSuccessful()) {
-                        notifyFailure(callback, new IOException("HTTP " + closeable.code()));
+                        String body = closeable.body() != null ? closeable.body().string() : "";
+                        notifyFailure(callback, new IOException(parseErrorMessage(body, closeable.code())));
                         return;
                     }
                     String body = closeable.body() != null ? closeable.body().string() : "";
@@ -518,6 +519,23 @@ public class TourInfoApiClient {
             return null;
         }
         return (T) gson.fromJson(data, dataType);
+    }
+
+    private String parseErrorMessage(@Nullable String responseBody, int httpCode) {
+        if (!isBlank(responseBody)) {
+            try {
+                JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
+                if (root.has("message") && !root.get("message").isJsonNull()) {
+                    String message = root.get("message").getAsString();
+                    if (!isBlank(message)) {
+                        return message;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall back to the HTTP status below when the backend returns non-JSON.
+            }
+        }
+        return "HTTP " + httpCode;
     }
 
     private HttpUrl.Builder requireBaseUrl() {

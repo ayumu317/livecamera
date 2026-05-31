@@ -336,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
         serpApiClient = new SerpApiClient();
         tencentLocationHelper = new TencentLocationHelper(this);
         locationSearchClient = new LocationSearchClient();
-        tourInfoApiClient = new TourInfoApiClient();
+        tourInfoApiClient = TourManagementBackendConfig.newClient(this);
         tourAuthSession = new TourAuthSession(this);
         initViewState();
         initListeners();

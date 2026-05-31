@@ -25,7 +25,7 @@ public class TourAuthSessionTest {
     public void savePersistsUserIdentityAndToken() {
         TourAuthSession session = new TourAuthSession(new MemoryStorage());
         TourAuthResult authResult = new Gson().fromJson(
-                "{\"token\":\"token-123\",\"expires_at\":\"2026-05-29T12:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"旅行者\"}}",
+                "{\"token\":\"token-123\",\"expires_at\":\"2099-05-29T12:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"旅行者\"}}",
                 TourAuthResult.class
         );
 

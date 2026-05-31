@@ -45,7 +45,7 @@ public class AccountActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_account);
         authSession = new TourAuthSession(this);
-        tourInfoApiClient = new TourInfoApiClient();
+        tourInfoApiClient = TourManagementBackendConfig.newClient(this);
         applyWindowInsets();
         bindViews();
         initListeners();
@@ -155,7 +155,7 @@ public class AccountActivity extends AppCompatActivity {
             public void onFailure(@NonNull Exception exception) {
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("登录失败，APP 原功能不受影响");
+                    showToast("登录失败：" + formatBackendError(exception));
                 });
             }
         });
@@ -185,7 +185,7 @@ public class AccountActivity extends AppCompatActivity {
             public void onFailure(@NonNull Exception exception) {
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("注册失败，APP 原功能不受影响");
+                    showToast("注册失败：" + formatBackendError(exception));
                 });
             }
         });
@@ -277,10 +277,12 @@ public class AccountActivity extends AppCompatActivity {
             tvAccountStatus.setText("已登录");
             tvAccountUser.setText("账号：" + authSession.getDisplayName()
                     + "\n用户标识：" + authSession.getCurrentAppUserId()
-                    + "\n角色：" + valueOrDefault(authSession.getRole(), "user"));
+                    + "\n角色：" + valueOrDefault(authSession.getRole(), "user")
+                    + "\n后台：" + currentBackendLabel());
         } else {
             tvAccountStatus.setText("未登录");
-            tvAccountUser.setText("未登录时后台增强会使用 android-local，不影响识别、导航和日记。");
+            tvAccountUser.setText("未登录时后台增强会使用 android-local，不影响识别、导航和日记。"
+                    + "\n后台：" + currentBackendLabel());
         }
         etAccountUsername.setVisibility(loggedIn ? View.GONE : View.VISIBLE);
         etAccountCredential.setVisibility(loggedIn ? View.GONE : View.VISIBLE);
@@ -352,6 +354,18 @@ public class AccountActivity extends AppCompatActivity {
 
     private String valueOrDefault(String value, String fallback) {
         return isBlank(value) ? fallback : value.trim();
+    }
+
+    private String currentBackendLabel() {
+        return TourManagementBackendConfig.shortLabel(TourManagementBackendConfig.resolveBaseUrl(this));
+    }
+
+    private String formatBackendError(@NonNull Exception exception) {
+        String message = exception.getMessage();
+        if (isBlank(message)) {
+            return "无法连接后台，APP 原功能不受影响";
+        }
+        return message + "，后台：" + currentBackendLabel();
     }
 
     private boolean isBlank(String value) {

@@ -278,6 +278,16 @@ public class TourInfoApiClientTest {
     }
 
     @Test
+    public void httpErrorJsonMessageTriggersFailureCallback() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":false,\"code\":401,\"message\":\"用户名或密码错误\",\"data\":null}")
+                .setResponseCode(401));
+
+        Exception error = this.<TourAuthResult>awaitFailure(callback -> client.login("admin", "wrong-value", callback));
+
+        assertEquals("用户名或密码错误", error.getMessage());
+    }
+
+    @Test
     public void invalidRecognitionIdFailsBeforeNetworkRequest() throws Exception {
         Exception error = this.<TourRecognitionCostResult>awaitFailure(callback -> client.getRecognitionCost(0, callback));
 

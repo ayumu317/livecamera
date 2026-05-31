@@ -49,7 +49,7 @@ public class TravelPlanActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_travel_plan);
         authSession = new TourAuthSession(this);
-        tourInfoApiClient = new TourInfoApiClient();
+        tourInfoApiClient = TourManagementBackendConfig.newClient(this);
         readCurrentPlaceExtras();
         applyWindowInsets();
         bindViews();
