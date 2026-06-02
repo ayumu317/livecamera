@@ -69,14 +69,18 @@ public class DoubaoVisionClient {
     public static final class UsageStats {
         public final int inputTokens;
         public final int outputTokens;
+        public final int totalTokens;
+        public final int cachedInputTokens;
 
-        UsageStats(int inputTokens, int outputTokens) {
+        UsageStats(int inputTokens, int outputTokens, int totalTokens, int cachedInputTokens) {
             this.inputTokens = inputTokens;
             this.outputTokens = outputTokens;
+            this.totalTokens = totalTokens;
+            this.cachedInputTokens = cachedInputTokens;
         }
 
         public boolean hasUsage() {
-            return inputTokens > 0 || outputTokens > 0;
+            return inputTokens > 0 || outputTokens > 0 || totalTokens > 0;
         }
     }
 
@@ -143,7 +147,17 @@ public class DoubaoVisionClient {
             String userAnimeName,
             Callback callback
     ) {
-        sendRecognitionRequest(base64Image, buildAnimeWithUserWorkPrompt(gpsLatLng, userAnimeName), callback);
+        identifyAnimeWithUserWork(base64Image, gpsLatLng, userAnimeName, null, callback);
+    }
+
+    public void identifyAnimeWithUserWork(
+            String base64Image,
+            @Nullable double[] gpsLatLng,
+            String userAnimeName,
+            @Nullable String userLocationHint,
+            Callback callback
+    ) {
+        sendRecognitionRequest(base64Image, buildAnimeWithUserWorkPrompt(gpsLatLng, userAnimeName, userLocationHint), callback);
     }
 
     private void sendRecognitionRequest(String base64Image, String prompt, Callback callback) {
@@ -288,10 +302,19 @@ public class DoubaoVisionClient {
     }
 
     private String buildAnimeWithUserWorkPrompt(@Nullable double[] gpsLatLng, String userAnimeName) {
+        return buildAnimeWithUserWorkPrompt(gpsLatLng, userAnimeName, null);
+    }
+
+    private String buildAnimeWithUserWorkPrompt(@Nullable double[] gpsLatLng, String userAnimeName, @Nullable String userLocationHint) {
         String safeAnimeName = firstNonBlank(userAnimeName, "用户指定作品");
+        String safeLocationHint = firstNonBlank(userLocationHint, "");
         StringBuilder builder = new StringBuilder();
         builder.append("你是 LiveCamera-LBS 的动漫圣地巡礼匹配助手。\n");
         builder.append("用户已经指定作品名为：「").append(safeAnimeName).append("」。\n");
+        if (!isBlank(safeLocationHint)) {
+            builder.append("用户同时提供了地点线索或正确地点为：「").append(safeLocationHint).append("」。\n");
+            builder.append("请把该地点线索作为强约束，结合当前上传图片判断它在该作品中的巡礼对应关系；不要忽略用户提供的地点。\n");
+        }
         builder.append("请不要再判断它是不是国内旅游景点。\n");
         builder.append("请基于“用户指定作品 + 当前上传图片”判断图片最可能对应该作品中的哪些现实巡礼地点、场景线索或取景地。\n\n");
         builder.append("必须只返回 JSON，不要 Markdown，不要解释。\n\n");
@@ -303,7 +326,8 @@ public class DoubaoVisionClient {
         builder.append("4. location_name 不确定时可以写“地点待确认”，但 visual_keywords 必须尽量从图片提取。\n");
         builder.append("5. spot_search_keywords 用于后续匹配 Anitabi / SerpApi 结果。\n");
         builder.append("6. 不要输出旅游攻略式介绍。\n");
-        builder.append("7. 不要返回 JSON 以外的内容。");
+        builder.append("7. 如果用户提供了地点线索，location_name 应优先输出该地点或更精确的同义地点名，spot_search_keywords 必须包含该地点线索。\n");
+        builder.append("8. 不要返回 JSON 以外的内容。");
         appendGpsHint(builder, gpsLatLng);
         return builder.toString();
     }
@@ -392,7 +416,19 @@ public class DoubaoVisionClient {
                 usage.optInt("output_tokens", 0),
                 usage.optInt("completion_tokens", 0)
         );
-        UsageStats result = new UsageStats(inputTokens, outputTokens);
+        int totalTokens = firstPositiveInt(
+                usage.optInt("total_tokens", 0),
+                inputTokens + outputTokens
+        );
+        int cachedInputTokens = 0;
+        JSONObject inputDetails = usage.optJSONObject("input_tokens_details");
+        if (inputDetails == null) {
+            inputDetails = usage.optJSONObject("prompt_tokens_details");
+        }
+        if (inputDetails != null) {
+            cachedInputTokens = inputDetails.optInt("cached_tokens", 0);
+        }
+        UsageStats result = new UsageStats(inputTokens, outputTokens, totalTokens, cachedInputTokens);
         return result.hasUsage() ? result : null;
     }
 

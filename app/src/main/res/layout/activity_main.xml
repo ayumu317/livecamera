@@ -987,17 +987,31 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:baselineAligned="false"
-                            android:orientation="horizontal">
+                            android:orientation="vertical">
 
                             <EditText
                                 android:id="@+id/etManualAnimeName"
-                                android:layout_width="0dp"
+                                android:layout_width="match_parent"
                                 android:layout_height="48dp"
-                                android:layout_marginEnd="8dp"
-                                android:layout_weight="1"
                                 android:backgroundTint="@color/card_stroke"
-                                android:hint="输入作品名或地点"
+                                android:hint="作品名（可选）"
+                                android:imeOptions="actionNext"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:paddingStart="12dp"
+                                android:paddingEnd="12dp"
+                                android:textColor="@color/text_primary"
+                                android:textColorHint="@color/text_secondary"
+                                android:textSize="14sp"
+                                tools:ignore="HardcodedText" />
+
+                            <EditText
+                                android:id="@+id/etManualLocationName"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
+                                android:backgroundTint="@color/card_stroke"
+                                android:hint="地点线索 / 正确地点（可选）"
                                 android:imeOptions="actionSearch"
                                 android:inputType="text"
                                 android:maxLines="1"
@@ -1010,8 +1024,9 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnSearchManualAnime"
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="48dp"
+                                android:layout_marginTop="10dp"
                                 android:minHeight="48dp"
                                 android:text="重新匹配"
                                 android:textAllCaps="false"

@@ -46,6 +46,9 @@ android {
         buildConfigField("String", "MANAGEMENT_BASE_URL", "\"${buildConfigString("MANAGEMENT_BASE_URL", "https://backend-production-d4a53.up.railway.app")}\"")
         buildConfigField("String", "SERPAPI_KEY", "\"${buildConfigString("SERPAPI_KEY")}\"")
         buildConfigField("String", "TENCENT_MAP_SDK_KEY", "\"${buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")}\"")
+        buildConfigField("String", "SERPAPI_COST_CNY_PER_SEARCH", "\"${buildConfigString("SERPAPI_COST_CNY_PER_SEARCH")}\"")
+        buildConfigField("String", "TENCENT_LOCATION_COST_CNY_PER_CALL", "\"${buildConfigString("TENCENT_LOCATION_COST_CNY_PER_CALL")}\"")
+        buildConfigField("String", "LOCATION_GATEWAY_COST_CNY_PER_CALL", "\"${buildConfigString("LOCATION_GATEWAY_COST_CNY_PER_CALL")}\"")
         manifestPlaceholders["TencentMapSDK_KEY"] = buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")
     }
 

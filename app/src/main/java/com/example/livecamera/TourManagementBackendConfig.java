@@ -52,12 +52,13 @@ public final class TourManagementBackendConfig {
     public static boolean hasOverride(@NonNull Context context) {
         SharedPreferences preferences = context.getApplicationContext()
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        return !isBlank(preferences.getString(PREF_MANAGEMENT_BASE_URL_OVERRIDE, ""));
+        String normalizedOverride = normalizeBaseUrl(preferences.getString(PREF_MANAGEMENT_BASE_URL_OVERRIDE, ""));
+        return isValidHttpUrl(normalizedOverride) && !isLegacyDefault(normalizedOverride);
     }
 
     static String resolveBaseUrl(@Nullable String overrideValue, @Nullable String buildDefaultValue) {
         String normalizedOverride = normalizeBaseUrl(overrideValue);
-        if (isValidHttpUrl(normalizedOverride)) {
+        if (isValidHttpUrl(normalizedOverride) && !isLegacyDefault(normalizedOverride)) {
             return normalizedOverride;
         }
         String normalizedDefault = normalizeBaseUrl(buildDefaultValue);

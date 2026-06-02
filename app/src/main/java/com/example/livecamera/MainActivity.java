@@ -74,6 +74,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -101,6 +102,21 @@ public class MainActivity extends AppCompatActivity {
     private static final String THEME_MINT = "mint";
     private static final String THEME_WARM = "warm";
     private static final String THEME_DARK = "dark";
+    private static final long MANAGEMENT_COST_WAIT_TIMEOUT_MS = 2500L;
+    private static final long MANAGEMENT_COST_VISIBLE_DELAY_MS = 900L;
+    private static final long WORK_INFO_FALLBACK_TIMEOUT_MS = 6500L;
+    private static final int MAX_WORK_INFO_SEARCH_NAMES = 4;
+    private static final int DOUBAO_LITE_TIER_1_MAX_INPUT_TOKENS = 32_000;
+    private static final int DOUBAO_LITE_TIER_2_MAX_INPUT_TOKENS = 128_000;
+    private static final double DOUBAO_LITE_TIER_1_INPUT_PRICE_PER_MILLION = 0.6;
+    private static final double DOUBAO_LITE_TIER_1_CACHED_INPUT_PRICE_PER_MILLION = 0.12;
+    private static final double DOUBAO_LITE_TIER_1_OUTPUT_PRICE_PER_MILLION = 3.6;
+    private static final double DOUBAO_LITE_TIER_2_INPUT_PRICE_PER_MILLION = 0.9;
+    private static final double DOUBAO_LITE_TIER_2_CACHED_INPUT_PRICE_PER_MILLION = 0.18;
+    private static final double DOUBAO_LITE_TIER_2_OUTPUT_PRICE_PER_MILLION = 5.4;
+    private static final double DOUBAO_LITE_TIER_3_INPUT_PRICE_PER_MILLION = 1.8;
+    private static final double DOUBAO_LITE_TIER_3_CACHED_INPUT_PRICE_PER_MILLION = 0.36;
+    private static final double DOUBAO_LITE_TIER_3_OUTPUT_PRICE_PER_MILLION = 10.8;
     private static final String DEFAULT_RESULT_HINT = "请选择一张实景照片，然后点击“开始识别”。";
     private static final String DEFAULT_DESC_HINT = "等待识别结果";
 
@@ -118,6 +134,7 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnModeDomestic;
     private MaterialButton btnModeAuto;
     private EditText etManualAnimeName;
+    private EditText etManualLocationName;
     private MaterialButton btnSearchManualAnime;
     private MaterialButton btnSaveRecord;
     private MaterialButton btnConfirmAnimeResult;
@@ -206,6 +223,9 @@ public class MainActivity extends AppCompatActivity {
     private Integer lastManagementRecognitionId;
     private String lastManagementSupplementText;
     private DoubaoVisionClient.UsageStats lastDoubaoUsageStats;
+    private int currentSerpApiSearchCount;
+    private int currentTencentLocationCallCount;
+    private int currentLocationGatewayCallCount;
     private DeviceLocationSnapshot currentDeviceLocation;
     private LocationNavigationTarget currentNavigationTarget;
     private ResultMode currentResultMode = ResultMode.NONE;
@@ -288,6 +308,16 @@ public class MainActivity extends AppCompatActivity {
             this.pointDetail = pointDetail;
             this.score = score;
             this.reason = reason;
+        }
+    }
+
+    private static final class DoubaoOfficialCost {
+        final double totalCostCny;
+        final String tierLabel;
+
+        DoubaoOfficialCost(double totalCostCny, String tierLabel) {
+            this.totalCostCny = totalCostCny;
+            this.tierLabel = tierLabel;
         }
     }
 
@@ -423,6 +453,7 @@ public class MainActivity extends AppCompatActivity {
         btnModeDomestic = findViewById(R.id.btnModeDomestic);
         btnModeAuto = findViewById(R.id.btnModeAuto);
         etManualAnimeName = findViewById(R.id.etManualAnimeName);
+        etManualLocationName = findOptionalViewByName("etManualLocationName");
         btnSearchManualAnime = findViewById(R.id.btnSearchManualAnime);
         btnSaveRecord = findOptionalViewByName("btnSaveRecord");
         btnConfirmAnimeResult = findOptionalViewByName("btnConfirmAnimeResult");
@@ -954,17 +985,33 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startManualAnimeRematch() {
-        String animeName = etManualAnimeName != null ? etManualAnimeName.getText().toString().trim() : "";
-        if (isBlank(animeName)) {
-            showToast("请输入作品名");
+        String inputAnimeName = etManualAnimeName != null ? etManualAnimeName.getText().toString().trim() : "";
+        String inputLocationName = etManualLocationName != null ? etManualLocationName.getText().toString().trim() : "";
+        if (isBlank(inputAnimeName) && isBlank(inputLocationName)) {
+            showToast("请输入作品名或地点线索");
             return;
         }
-        Log.d(DEBUG_TAG, "manualAnimeName = " + animeName);
-        submitManagementCorrection(animeName);
-        startAnimeRematchWithWork(animeName, false);
+        String animeName = chooseFirstNonBlank(
+                inputAnimeName,
+                confirmedAnimeName,
+                currentAnimeName,
+                lastParsedResult != null ? lastParsedResult.animeTitle : null
+        );
+        if (isBlank(animeName)) {
+            showToast("只纠正地点时，请先补充作品名");
+            return;
+        }
+        Log.d(DEBUG_TAG, "manualAnimeName = " + inputAnimeName);
+        Log.d(DEBUG_TAG, "manualLocationName = " + inputLocationName);
+        submitManagementCorrection(inputAnimeName, inputLocationName);
+        startAnimeRematchWithWork(animeName, false, inputLocationName);
     }
 
     private void startAnimeRematchWithWork(String animeName, boolean selectedFromAi) {
+        startAnimeRematchWithWork(animeName, selectedFromAi, null);
+    }
+
+    private void startAnimeRematchWithWork(String animeName, boolean selectedFromAi, @Nullable String userLocationHint) {
         if (isBlank(animeName)) {
             showToast("请输入作品名");
             return;
@@ -977,6 +1024,7 @@ public class MainActivity extends AppCompatActivity {
             Log.d(DEBUG_TAG, "selectedAnimeFromAI = " + animeName);
         }
         Log.d(DEBUG_TAG, "start AI rematch with image and work = " + animeName);
+        Log.d(DEBUG_TAG, "start AI rematch with location hint = " + userLocationHint);
         showProcessingPlaceholder();
         updateLoadingState(true);
         lastDoubaoUsageStats = null;
@@ -994,16 +1042,16 @@ public class MainActivity extends AppCompatActivity {
                 renderError("图片处理失败，请换一张图片后重试", e);
                 return;
             }
-            doubaoVisionClient.identifyAnimeWithUserWork(base64Image, gpsLatLng, animeName, new DoubaoVisionClient.Callback() {
+            doubaoVisionClient.identifyAnimeWithUserWork(base64Image, gpsLatLng, animeName, userLocationHint, new DoubaoVisionClient.Callback() {
                 @Override
                 public void onSuccess(DoubaoVisionClient.RecognitionResponse response) {
                     cacheDoubaoUsage(response);
-                    handleAnimeRematchSuccess(response == null ? "" : response.businessJson, animeName, searchGeneration);
+                    handleAnimeRematchSuccess(response == null ? "" : response.businessJson, animeName, userLocationHint, searchGeneration);
                 }
 
                 @Override
                 public void onSuccess(String responseBody) {
-                    handleAnimeRematchSuccess(responseBody, animeName, searchGeneration);
+                    handleAnimeRematchSuccess(responseBody, animeName, userLocationHint, searchGeneration);
                 }
 
                 @Override
@@ -1019,17 +1067,18 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void handleAnimeRematchSuccess(String responseBody, String userAnimeName, int searchGeneration) {
+    private void handleAnimeRematchSuccess(String responseBody, String userAnimeName, @Nullable String userLocationHint, int searchGeneration) {
         final ParsedResult parsedResult;
         try {
             ParsedResult rawResult = parseAssistantReply(responseBody);
-            parsedResult = normalizeRematchResult(rawResult, userAnimeName);
+            parsedResult = normalizeRematchResult(rawResult, userAnimeName, userLocationHint);
         } catch (IllegalStateException e) {
             Log.e(TAG, "Failed to parse anime rematch response", e);
             renderError("未能从作品重匹配结果中提取地点线索", e);
             return;
         }
         Log.d(DEBUG_TAG, "rematch location_name = " + parsedResult.locationName);
+        Log.d(DEBUG_TAG, "rematch user_location_hint = " + userLocationHint);
         Log.d(DEBUG_TAG, "rematch visual_keywords = " + parsedResult.visualKeywords);
         Log.d(DEBUG_TAG, "rematch spot_search_keywords = " + parsedResult.spotSearchKeywords);
         runSafelyOnUiThread(() -> {
@@ -1054,7 +1103,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private ParsedResult normalizeRematchResult(ParsedResult parsedResult, String userAnimeName) {
+    private ParsedResult normalizeRematchResult(ParsedResult parsedResult, String userAnimeName, @Nullable String userLocationHint) {
         List<String> animeNames = new ArrayList<>();
         if (!isBlank(userAnimeName)) {
             animeNames.add(userAnimeName.trim());
@@ -1066,10 +1115,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+        String parsedLocation = parsedResult != null ? parsedResult.locationName : "";
+        String locationName = isUncertainLocationName(parsedLocation)
+                ? chooseFirstNonBlank(userLocationHint, parsedLocation)
+                : chooseFirstNonBlank(parsedLocation, userLocationHint);
         return new ParsedResult(
                 animeNames,
                 chooseFirstNonBlank(userAnimeName, parsedResult != null ? parsedResult.animeTitle : ""),
-                parsedResult != null ? parsedResult.locationName : "",
+                locationName,
                 parsedResult != null ? parsedResult.summary : "",
                 false,
                 parsedResult != null ? parsedResult.visualKeywords : null,
@@ -1077,6 +1130,18 @@ public class MainActivity extends AppCompatActivity {
                 parsedResult != null ? parsedResult.confidence : -1,
                 parsedResult != null ? parsedResult.reason : ""
         );
+    }
+
+    private boolean isUncertainLocationName(@Nullable String locationName) {
+        if (isBlank(locationName)) {
+            return true;
+        }
+        String value = locationName.trim();
+        return value.contains("待确认")
+                || value.contains("未知")
+                || value.contains("不确定")
+                || value.equalsIgnoreCase("unknown")
+                || value.equalsIgnoreCase("unknown location");
     }
 
     private void handleGalleryResult(Uri uri) {
@@ -1559,6 +1624,7 @@ public class MainActivity extends AppCompatActivity {
         if (tencentLocationHelper == null || isStaleSearch(searchGeneration)) {
             return;
         }
+        currentTencentLocationCallCount++;
         tencentLocationHelper.startSingleLocation(new TencentLocationHelper.LocationCallback() {
             @Override
             public void onSuccess(double latitude, double longitude, @Nullable String address) {
@@ -1588,6 +1654,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        currentLocationGatewayCallCount++;
         locationSearchClient.search(parsedResult.locationName, parsedResult.isDomestic, new LocationSearchClient.Callback() {
             @Override
             public void onSuccess(@NonNull LocationSearchClient.LocationResult locationResult) {
@@ -2092,11 +2159,54 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(animeName) || anitabiApiClient == null) {
             return;
         }
-        List<String> searchNames = buildWorkInfoSearchNames(animeName);
+        List<String> searchNames = limitWorkInfoSearchNames(buildWorkInfoSearchNames(animeName));
         Log.d(DEBUG_TAG, "work info request: displayAnimeName=" + animeName
                 + ", searchNames=" + searchNames
                 + ", generation=" + searchGeneration);
+        runSafelyOnUiThread(() -> {
+            if (!isStaleSearch(searchGeneration) && currentResultMode == ResultMode.OVERSEAS) {
+                showWorkInfoSection(buildWorkInfoLoadingText(animeName));
+            }
+        });
+        requestManagementThemeInfoForWork(animeName, searchGeneration);
+        requestManagementAssistWorkInfoForWork(animeName, searchGeneration);
+        scheduleWorkInfoFallback(animeName, searchGeneration);
         requestWorkInfoBySearchNames(animeName, searchNames, 0, searchGeneration);
+    }
+
+    private List<String> limitWorkInfoSearchNames(List<String> searchNames) {
+        if (searchNames == null || searchNames.size() <= MAX_WORK_INFO_SEARCH_NAMES) {
+            return searchNames;
+        }
+        return new ArrayList<>(searchNames.subList(0, MAX_WORK_INFO_SEARCH_NAMES));
+    }
+
+    private void scheduleWorkInfoFallback(String animeName, int searchGeneration) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (isStaleSearch(searchGeneration)
+                    || currentResultMode != ResultMode.OVERSEAS
+                    || !isWorkInfoStillLoading(animeName)) {
+                return;
+            }
+            Log.d(DEBUG_TAG, "workInfo fallback timeout: displayAnimeName=" + animeName
+                    + ", generation=" + searchGeneration);
+            showWorkInfoSection(buildWorkInfoUnavailableText(animeName));
+            requestFallbackWorkCover(animeName, searchGeneration);
+        }, WORK_INFO_FALLBACK_TIMEOUT_MS);
+    }
+
+    private boolean isWorkInfoStillLoading(String animeName) {
+        if (tvWorkInfo == null || isBlank(animeName)) {
+            return false;
+        }
+        CharSequence text = tvWorkInfo.getText();
+        if (text == null) {
+            return false;
+        }
+        String value = text.toString();
+        return value.contains(animeName)
+                && value.contains("Bangumi")
+                && (value.contains("正在") || value.contains("获取"));
     }
 
     private void requestWorkInfoBySearchNames(
@@ -2109,6 +2219,15 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (searchNames == null || searchIndex >= searchNames.size()) {
+            runSafelyOnUiThread(() -> {
+                if (!isStaleSearch(searchGeneration)
+                        && currentResultMode == ResultMode.OVERSEAS
+                        && (isSameWorkTitleForCurrentResult(currentAnimeName, originalAnimeName)
+                        || isSameWorkTitleForCurrentResult(confirmedAnimeName, originalAnimeName))) {
+                    Log.d(DEBUG_TAG, "workInfo failedReason=all search names exhausted, displayAnimeName=" + originalAnimeName);
+                    showWorkInfoSection(buildWorkInfoUnavailableText(originalAnimeName));
+                }
+            });
             requestManagementThemeInfoForWork(originalAnimeName, searchGeneration);
             requestFallbackWorkCover(originalAnimeName, searchGeneration);
             return;
@@ -2122,62 +2241,39 @@ public class MainActivity extends AppCompatActivity {
                 + ", searchIndex=" + searchIndex
                 + ", searchName=" + searchName
                 + ", generation=" + searchGeneration);
-        anitabiApiClient.searchBangumiSubjectIdByName(searchName, new AnitabiApiClient.ApiCallback<Integer>() {
+        anitabiApiClient.searchBangumiWorkInfoByName(searchName, new AnitabiApiClient.ApiCallback<AnitabiApiClient.BangumiLiteResponse>() {
             @Override
-            public void onSuccess(Integer subjectId) {
-                if (isStaleSearch(searchGeneration) || subjectId == null || subjectId <= 0) {
-                    Log.d(DEBUG_TAG, "work info subject search skipped: displayAnimeName=" + originalAnimeName
+            public void onSuccess(AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
+                if (isStaleSearch(searchGeneration) || bangumiLiteResponse == null) {
+                    Log.d(DEBUG_TAG, "work info result skipped: displayAnimeName=" + originalAnimeName
                             + ", searchName=" + searchName
-                            + ", subjectId=" + subjectId
                             + ", stale=" + isStaleSearch(searchGeneration));
                     return;
                 }
-                Log.d(DEBUG_TAG, "work info subject selected: displayAnimeName=" + originalAnimeName
+                int subjectId = parseIntSafely(bangumiLiteResponse.getId());
+                Log.d(DEBUG_TAG, "workInfo selectedSubjectId=" + subjectId
+                        + ", displayAnimeName=" + originalAnimeName
                         + ", searchName=" + searchName
-                        + ", subjectId=" + subjectId);
-                anitabiApiClient.getBangumiLite(subjectId, new AnitabiApiClient.ApiCallback<AnitabiApiClient.BangumiLiteResponse>() {
-                    @Override
-                    public void onSuccess(AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
-                        if (isStaleSearch(searchGeneration) || bangumiLiteResponse == null) {
-                            Log.d(DEBUG_TAG, "work info lite skipped: displayAnimeName=" + originalAnimeName
-                                    + ", searchName=" + searchName
-                                    + ", subjectId=" + subjectId
-                                    + ", stale=" + isStaleSearch(searchGeneration)
-                                    + ", isNull=" + (bangumiLiteResponse == null));
-                            return;
-                        }
-                        requestWorkSubjectInfoForCurrentResult(
-                                originalAnimeName,
-                                searchName,
-                                bangumiLiteResponse,
-                                subjectId,
-                                searchGeneration,
-                                searchNames,
-                                searchIndex + 1
-                        );
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        Log.d(DEBUG_TAG, "work info lite unavailable: " + safeMessage(e, "unknown"));
-                        AnitabiApiClient.BangumiLiteResponse liteFallback = new AnitabiApiClient.BangumiLiteResponse();
-                        liteFallback.setId(String.valueOf(subjectId));
-                        requestWorkSubjectInfoForCurrentResult(
-                                originalAnimeName,
-                                searchName,
-                                liteFallback,
-                                subjectId,
-                                searchGeneration,
-                                searchNames,
-                                searchIndex + 1
-                        );
-                    }
-                });
+                        + ", selectedName=" + bangumiLiteResponse.getSubjectName()
+                        + ", selectedNameCn=" + bangumiLiteResponse.getSubjectNameCn()
+                        + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(bangumiLiteResponse)
+                        + ", workImageUrl=" + getBangumiWorkImageUrl(bangumiLiteResponse));
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)
+                        && tryNextWorkInfoSearch(originalAnimeName, searchNames, searchIndex + 1, searchGeneration)) {
+                    return;
+                }
+                applyWorkInfoToCurrentResult(originalAnimeName, searchName, subjectId, bangumiLiteResponse, searchGeneration);
+                if (!hasDetailedWorkInfo(bangumiLiteResponse)) {
+                    requestManagementThemeInfoForWork(originalAnimeName, searchGeneration);
+                }
             }
 
             @Override
             public void onFailure(Exception e) {
-                Log.d(DEBUG_TAG, "work info subject search unavailable for " + searchName + ": " + safeMessage(e, "unknown"));
+                Log.d(DEBUG_TAG, "workInfo failedReason=search unavailable, displayAnimeName="
+                        + originalAnimeName
+                        + ", searchName=" + searchName
+                        + ", reason=" + safeMessage(e, "unknown"));
                 requestWorkInfoBySearchNames(originalAnimeName, searchNames, searchIndex + 1, searchGeneration);
             }
         });
@@ -2204,6 +2300,43 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Exception exception) {
                 Log.d(DEBUG_TAG, "management work info skipped: " + exception.getMessage());
+            }
+        });
+    }
+
+    private void requestManagementAssistWorkInfoForWork(String animeName, int searchGeneration) {
+        if (tourInfoApiClient == null || isBlank(animeName)) {
+            return;
+        }
+        tourInfoApiClient.getRecognitionAssist(animeName, getCurrentManagementAppUserId(), getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
+            @Override
+            public void onSuccess(TourRecognitionAssistResponse data) {
+                if (isStaleSearch(searchGeneration)
+                        || data == null
+                        || data.getItems() == null
+                        || data.getItems().isEmpty()) {
+                    return;
+                }
+                TourRecognitionAssistCandidate candidate = data.getItems().get(0);
+                runSafelyOnUiThread(() -> {
+                    if (isStaleSearch(searchGeneration)
+                            || !shouldApplyManagementWorkInfoFallback(animeName)) {
+                        return;
+                    }
+                    String workInfo = buildManagementAssistWorkInfoText(animeName, candidate);
+                    if (!isBlank(workInfo)) {
+                        Log.d(DEBUG_TAG, "management assist work info applied: displayAnimeName="
+                                + animeName
+                                + ", themeName=" + candidate.getThemeName()
+                                + ", locationName=" + candidate.getLocationName());
+                        showWorkInfoSection(workInfo);
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                Log.d(DEBUG_TAG, "management assist work info skipped: " + exception.getMessage());
             }
         });
     }
@@ -2299,9 +2432,12 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         return !isBlank(bangumiLiteResponse.getSubjectSummary())
+                || !isBlank(bangumiLiteResponse.getSubjectName())
+                || !isBlank(bangumiLiteResponse.getSubjectNameCn())
                 || !isBlank(bangumiLiteResponse.getSubjectDate())
                 || (bangumiLiteResponse.getSubjectEps() != null && bangumiLiteResponse.getSubjectEps() > 0)
                 || !isBlank(bangumiLiteResponse.getSubjectPlatform())
+                || !isBlank(getBangumiWorkImageUrl(bangumiLiteResponse))
                 || parseIntSafely(bangumiLiteResponse.getPointsLength()) > 0;
     }
 
@@ -2367,6 +2503,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(DEBUG_TAG, "work cover fallback request: displayAnimeName=" + animeName
                 + ", searchName=" + coverSearchName
                 + ", generation=" + searchGeneration);
+        currentSerpApiSearchCount++;
         serpApiClient.fetchImageByQuery(coverSearchName + " 动画 作品 封面", new SerpApiClient.Callback() {
             @Override
             public void onSuccess(String imageUrl) {
@@ -2416,7 +2553,8 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(currentAnimeName)) {
             return "current anime name is blank";
         }
-        if (!isSameWorkTitleForCurrentResult(currentAnimeName, displayAnimeName)) {
+        if (!isSameWorkTitleForCurrentResult(currentAnimeName, displayAnimeName)
+                && !isSameWorkTitleForCurrentResult(confirmedAnimeName, displayAnimeName)) {
             return "display name no longer current";
         }
         return "";
@@ -2780,6 +2918,7 @@ public class MainActivity extends AppCompatActivity {
             );
             return;
         }
+        currentSerpApiSearchCount++;
         serpApiClient.fetchFallbackImage(animeName, locationName, new SerpApiClient.Callback() {
             @Override
             public void onSuccess(String imageUrl) {
@@ -3283,6 +3422,9 @@ public class MainActivity extends AppCompatActivity {
         String normalized = costText.trim();
         if (normalized.startsWith("本次估算成本")) {
             return normalized.substring("本次估算成本".length()).trim();
+        }
+        if (normalized.startsWith("本次费用")) {
+            return normalized.substring("本次费用".length()).trim();
         }
         return normalized;
     }
@@ -5006,21 +5148,22 @@ public class MainActivity extends AppCompatActivity {
                 record.referenceImageUrl = referenceImageUrlToSave;
                 record.timestamp = recordTimestamp;
                 AppDatabase.getInstance(MainActivity.this).pilgrimDao().insert(record);
+                boolean openDiaryAfterSave = SAVE_ACTION_OPEN_DIARY.equals(saveAction);
                 submitManagementRecognitionRecord(
                         animeNameToSave,
                         locationToSave,
                         descToSave,
                         persistentLocalImageUri,
                         recognitionModeToSave,
-                        isDomesticRecord
+                        isDomesticRecord,
+                        openDiaryAfterSave ? this::openPilgrimDiary : null
                 );
                 runSafelyOnUiThread(() -> {
                     hasSavedCurrentRecord = true;
                     updateSaveRecordButtonState();
-                    if (SAVE_ACTION_OPEN_DIARY.equals(saveAction)) {
-                        openPilgrimDiary();
-                    }
-                    showToast("打卡成功！已收录至巡礼日记");
+                    showToast(openDiaryAfterSave
+                            ? "打卡成功！正在同步后台计费"
+                            : "打卡成功！已收录至巡礼日记");
                 });
             } catch (Exception e) {
                 Log.e(DEBUG_TAG, "保存巡礼记录失败", e);
@@ -5152,10 +5295,30 @@ public class MainActivity extends AppCompatActivity {
             String description,
             String imageUri,
             IdentifyMode recognitionMode,
-            boolean isDomesticRecord
+            boolean isDomesticRecord,
+            @Nullable Runnable afterCostSettled
     ) {
         if (tourInfoApiClient == null) {
+            runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                    "后台客户端未初始化，已跳过计费同步。"
+            )));
+            finishAfterManagementCostWait(afterCostSettled);
             return;
+        }
+        runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostSyncingText()));
+        AtomicBoolean costWaitSettled = new AtomicBoolean(false);
+        Runnable finishAfterCost = () -> {
+            if (afterCostSettled != null && costWaitSettled.compareAndSet(false, true)) {
+                runSafelyOnUiThread(afterCostSettled);
+            }
+        };
+        if (afterCostSettled != null) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (costWaitSettled.compareAndSet(false, true)) {
+                    Log.d(DEBUG_TAG, "management cost wait timeout; continue save action");
+                    runSafelyOnUiThread(afterCostSettled);
+                }
+            }, MANAGEMENT_COST_WAIT_TIMEOUT_MS);
         }
         TourInfoApiClient.RecognitionRecordPayload payload = new TourInfoApiClient.RecognitionRecordPayload()
                 .put("app_user_id", getCurrentManagementAppUserId())
@@ -5178,44 +5341,65 @@ public class MainActivity extends AppCompatActivity {
                 .put("user_confirmed", true)
                 .put("status", "saved");
         addDoubaoUsagePayload(payload);
+        addExternalApiUsagePayload(payload);
         tourInfoApiClient.createRecognitionRecord(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionRecordResult>() {
             @Override
             public void onSuccess(TourRecognitionRecordResult data) {
                 if (data == null || data.getId() <= 0) {
+                    Log.d(DEBUG_TAG, "management record create returned empty id");
+                    runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                            "后台记录已请求，但没有返回有效记录 ID，暂时无法计算费用。"
+                    )));
+                    finishAfterCost.run();
                     return;
                 }
                 lastManagementRecognitionId = data.getId();
-                requestManagementRecognitionCost(data.getId());
+                Log.d(DEBUG_TAG, "management record id=" + data.getId());
+                requestManagementRecognitionCost(data.getId(), () -> {
+                    if (afterCostSettled == null) {
+                        return;
+                    }
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                            finishAfterCost,
+                            MANAGEMENT_COST_VISIBLE_DELAY_MS
+                    );
+                });
             }
 
             @Override
             public void onFailure(@NonNull Exception exception) {
-                Log.d(DEBUG_TAG, "management recognition record skipped: " + exception.getMessage());
+                Log.d(DEBUG_TAG, "management record create failed: " + exception.getMessage());
+                runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                        "后台记录创建失败：" + chooseFirstNonBlank(exception.getMessage(), "无法连接后台")
+                )));
+                finishAfterCost.run();
             }
         });
     }
 
-    private void submitManagementCorrection(String correctedAnimeName) {
-        if (tourInfoApiClient == null || isBlank(correctedAnimeName)) {
+    private void submitManagementCorrection(@Nullable String correctedAnimeName, @Nullable String correctedLocationName) {
+        if (tourInfoApiClient == null || (isBlank(correctedAnimeName) && isBlank(correctedLocationName))) {
             return;
         }
+        String originalTheme = chooseFirstNonBlank(
+                confirmedAnimeName,
+                currentAnimeName,
+                lastParsedResult != null ? lastParsedResult.animeTitle : null
+        );
+        String originalLocation = chooseFirstNonBlank(
+                confirmedLocationName,
+                confirmedSpotName,
+                currentLocation,
+                lastParsedResult != null ? lastParsedResult.locationName : null
+        );
         TourInfoApiClient.CorrectionPayload payload = new TourInfoApiClient.CorrectionPayload()
                 .put("recognition_id", lastManagementRecognitionId)
                 .put("app_user_id", getCurrentManagementAppUserId())
-                .put("original_theme", chooseFirstNonBlank(
-                        confirmedAnimeName,
-                        currentAnimeName,
-                        lastParsedResult != null ? lastParsedResult.animeTitle : null
-                ))
-                .put("corrected_theme", correctedAnimeName)
-                .put("original_location", chooseFirstNonBlank(
-                        confirmedLocationName,
-                        confirmedSpotName,
-                        currentLocation,
-                        lastParsedResult != null ? lastParsedResult.locationName : null
-                ))
-                .put("corrected_location", currentLocation)
-                .put("correction_reason", "用户手动输入作品名后重新匹配");
+                .put("original_theme", originalTheme)
+                .put("corrected_theme", chooseFirstNonBlank(correctedAnimeName, originalTheme))
+                .put("original_location", originalLocation)
+                .put("corrected_location", chooseFirstNonBlank(correctedLocationName, originalLocation))
+                .put("correction_reason", buildCorrectionReason(correctedAnimeName, correctedLocationName));
         tourInfoApiClient.submitCorrection(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<Void>() {
             @Override
             public void onSuccess(Void data) {
@@ -5229,25 +5413,66 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private String buildCorrectionReason(@Nullable String correctedAnimeName, @Nullable String correctedLocationName) {
+        boolean hasAnime = !isBlank(correctedAnimeName);
+        boolean hasLocation = !isBlank(correctedLocationName);
+        if (hasAnime && hasLocation) {
+            return "用户手动纠正作品名和地点后重新匹配";
+        }
+        if (hasLocation) {
+            return "用户手动纠正地点后重新匹配";
+        }
+        return "用户手动纠正作品名后重新匹配";
+    }
+
     private void requestManagementRecognitionCost(int recognitionId) {
+        requestManagementRecognitionCost(recognitionId, null);
+    }
+
+    private void requestManagementRecognitionCost(int recognitionId, @Nullable Runnable afterCostSettled) {
         if (tourInfoApiClient == null) {
+            runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                    "后台客户端未初始化，已跳过计费同步。"
+            )));
+            finishAfterManagementCostWait(afterCostSettled);
             return;
         }
+        Log.d(DEBUG_TAG, "cost request start: recognitionId=" + recognitionId);
         tourInfoApiClient.getRecognitionCost(recognitionId, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionCostResult>() {
             @Override
             public void onSuccess(TourRecognitionCostResult data) {
                 if (data == null) {
+                    Log.d(DEBUG_TAG, "cost loaded empty: recognitionId=" + recognitionId);
+                    runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                            "后台已创建记录，但计费接口没有返回费用数据。"
+                    )));
+                    finishAfterManagementCostWait(afterCostSettled);
                     return;
                 }
                 String costText = buildManagementCostSupplement(data);
-                runSafelyOnUiThread(() -> showBackendCostSection(costText));
+                runSafelyOnUiThread(() -> {
+                    showBackendCostSection(costText);
+                    Log.d(DEBUG_TAG, "cost loaded: recognitionId=" + recognitionId);
+                });
+                finishAfterManagementCostWait(afterCostSettled);
             }
 
             @Override
             public void onFailure(@NonNull Exception exception) {
-                Log.d(DEBUG_TAG, "management cost skipped: " + exception.getMessage());
+                Log.d(DEBUG_TAG, "cost failed: recognitionId=" + recognitionId
+                        + ", reason=" + exception.getMessage());
+                runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
+                        "计费接口请求失败：" + chooseFirstNonBlank(exception.getMessage(), "无法连接后台")
+                )));
+                finishAfterManagementCostWait(afterCostSettled);
             }
         });
+    }
+
+    private void finishAfterManagementCostWait(@Nullable Runnable afterCostSettled) {
+        if (afterCostSettled != null) {
+            runSafelyOnUiThread(afterCostSettled);
+        }
     }
 
     private String getCurrentManagementAppUserId() {
@@ -5266,18 +5491,55 @@ public class MainActivity extends AppCompatActivity {
 
     private void cacheDoubaoUsage(@Nullable DoubaoVisionClient.RecognitionResponse response) {
         lastDoubaoUsageStats = response == null ? null : response.usageStats;
+        if (lastDoubaoUsageStats == null || !lastDoubaoUsageStats.hasUsage()) {
+            Log.d(DEBUG_TAG, "doubao usage missing in response");
+            return;
+        }
+        Log.d(DEBUG_TAG, "doubao usage: inputTokens=" + lastDoubaoUsageStats.inputTokens
+                + ", cachedInputTokens=" + lastDoubaoUsageStats.cachedInputTokens
+                + ", outputTokens=" + lastDoubaoUsageStats.outputTokens
+                + ", totalTokens=" + lastDoubaoUsageStats.totalTokens);
     }
 
     private void addDoubaoUsagePayload(TourInfoApiClient.RecognitionRecordPayload payload) {
-        if (payload == null || lastDoubaoUsageStats == null || !lastDoubaoUsageStats.hasUsage()) {
+        if (payload == null) {
+            return;
+        }
+        boolean hasProviderUsage = lastDoubaoUsageStats != null && lastDoubaoUsageStats.hasUsage();
+        if (!hasProviderUsage) {
+            payload.put("usage_available", false);
+            Log.d(DEBUG_TAG, "management usage payload skipped: provider usage missing");
             return;
         }
         payload.put("service_provider", "doubao")
                 .put("service_type", "vision_recognition")
                 .put("endpoint", BuildConfig.DOUBAO_RESPONSES_URL)
+                .put("model_id", chooseFirstNonBlank(BuildConfig.DOUBAO_MODEL_ID, BuildConfig.DOUBAO_MODEL))
                 .put("input_tokens", lastDoubaoUsageStats.inputTokens)
                 .put("output_tokens", lastDoubaoUsageStats.outputTokens)
-                .put("request_count", 1);
+                .put("total_tokens", lastDoubaoUsageStats.totalTokens)
+                .put("cached_input_tokens", lastDoubaoUsageStats.cachedInputTokens)
+                .put("request_count", 1)
+                .put("usage_available", true)
+                .put("usage_estimated", false);
+        Log.d(DEBUG_TAG, "management usage payload: providerUsage=true"
+                + ", inputTokens=" + lastDoubaoUsageStats.inputTokens
+                + ", cachedInputTokens=" + lastDoubaoUsageStats.cachedInputTokens
+                + ", outputTokens=" + lastDoubaoUsageStats.outputTokens
+                + ", totalTokens=" + lastDoubaoUsageStats.totalTokens);
+    }
+
+    private void addExternalApiUsagePayload(TourInfoApiClient.RecognitionRecordPayload payload) {
+        if (payload == null) {
+            return;
+        }
+        payload.put("serpapi_search_count", currentSerpApiSearchCount)
+                .put("tencent_location_call_count", currentTencentLocationCallCount)
+                .put("location_gateway_call_count", currentLocationGatewayCallCount)
+                .put("external_usage_available", true);
+        Log.d(DEBUG_TAG, "external usage payload: serpApi=" + currentSerpApiSearchCount
+                + ", tencentLocation=" + currentTencentLocationCallCount
+                + ", locationGateway=" + currentLocationGatewayCallCount);
     }
 
     private String buildManagementThemeSupplement(TourThemeMatchResult theme) {
@@ -5321,6 +5583,54 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    private boolean shouldApplyManagementWorkInfoFallback(String animeName) {
+        if (currentResultMode != ResultMode.OVERSEAS || isBlank(animeName)) {
+            return false;
+        }
+        if (!isSameWorkTitleForCurrentResult(currentAnimeName, animeName)
+                && !isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+            return false;
+        }
+        if (tvWorkInfo == null || tvWorkInfo.getText() == null) {
+            return true;
+        }
+        String value = tvWorkInfo.getText().toString();
+        if (isBlank(value)) {
+            return true;
+        }
+        return value.contains("Bangumi")
+                || value.contains("正在")
+                || value.contains("暂未")
+                || value.contains("后台学习资料");
+    }
+
+    private String buildManagementAssistWorkInfoText(
+            String animeName,
+            @Nullable TourRecognitionAssistCandidate candidate
+    ) {
+        if (candidate == null) {
+            return "";
+        }
+        String themeName = chooseFirstNonBlank(candidate.getThemeName(), animeName);
+        String sourceText = "learned".equals(candidate.getCandidateSource())
+                ? "后台学习记录"
+                : "后台候选记录";
+        return joinLines(
+                isBlank(themeName) ? "" : "作品名：" + themeName,
+                "资料来源：" + sourceText,
+                isBlank(candidate.getLocationName()) ? "" : "关联地点：" + candidate.getLocationName(),
+                "匹配分：" + formatCostAmount(candidate.getScore()),
+                candidate.getUserConfirmedCount() > 0
+                        ? "你已确认过：" + candidate.getUserConfirmedCount() + " 次"
+                        : "",
+                candidate.getGlobalConfirmedCount() > 0
+                        ? "全局确认：" + candidate.getGlobalConfirmedCount() + " 次"
+                        : "",
+                isBlank(candidate.getRecommendReason()) ? "" : "依据：" + candidate.getRecommendReason(),
+                "Bangumi 暂不可达时，已先使用后台学习记录作为作品资料兜底。"
+        );
+    }
+
     private String buildManagementAssistSupplement(TourRecognitionAssistCandidate candidate) {
         if (candidate == null || isBlank(candidate.getLocationName())) {
             return "";
@@ -5354,18 +5664,134 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    private String buildManagementCostSyncingText() {
+        return joinLines(
+                "本次费用",
+                "状态：正在同步后台计费，请稍候。"
+        );
+    }
+
+    private String buildManagementCostUnavailableText(String reason) {
+        return joinLines(
+                "本次费用",
+                "状态：" + chooseFirstNonBlank(reason, "后台暂时没有返回计费结果。"),
+                buildLocalUsageCostText(true)
+        );
+    }
+
     private String buildManagementCostSupplement(TourRecognitionCostResult cost) {
         if (cost == null) {
             return "";
         }
         String currency = chooseFirstNonBlank(cost.getCurrency(), "CNY");
+        boolean allZero = cost.getAiModelCost() <= 0
+                && cost.getMapServiceCost() <= 0
+                && cost.getOtherApiCost() <= 0
+                && cost.getTotalCost() <= 0;
+        String statusLine = allZero
+                ? "状态：后台已同步，本次后台返回费用为 0。"
+                : "状态：后台已返回本次费用。";
         return joinLines(
-                "本次估算成本",
-                "AI 模型：" + formatCostAmount(cost.getAiModelCost()) + " " + currency,
-                "地图服务：" + formatCostAmount(cost.getMapServiceCost()) + " " + currency,
-                "其他接口：" + formatCostAmount(cost.getOtherApiCost()) + " " + currency,
-                "合计：" + formatCostAmount(cost.getTotalCost()) + " " + currency
+                "本次费用",
+                statusLine,
+                buildLocalUsageCostText(allZero),
+                "后台 AI 模型：" + formatCostAmount(cost.getAiModelCost()) + " " + currency,
+                "后台地图服务：" + formatCostAmount(cost.getMapServiceCost()) + " " + currency,
+                "后台其他接口：" + formatCostAmount(cost.getOtherApiCost()) + " " + currency,
+                "后台合计：" + formatCostAmount(cost.getTotalCost()) + " " + currency
         );
+    }
+
+    private String buildLocalUsageCostText(boolean shouldShowLocalFallback) {
+        boolean hasDoubaoUsage = lastDoubaoUsageStats != null && lastDoubaoUsageStats.hasUsage();
+        boolean hasExternalUsage = currentSerpApiSearchCount > 0
+                || currentTencentLocationCallCount > 0
+                || currentLocationGatewayCallCount > 0;
+        if (!shouldShowLocalFallback && !hasDoubaoUsage && !hasExternalUsage) {
+            return "";
+        }
+
+        double externalCostCny = calculateConfiguredExternalApiCostCny();
+        String externalCostLine = externalCostCny > 0
+                ? "外部接口折算：" + formatCostAmount(externalCostCny) + " CNY"
+                : "外部接口折算：等待后台账单或本地单次价格配置。";
+        if (!hasDoubaoUsage) {
+            return joinLines(
+                    "AI 模型用量：本次未返回 token usage，无法本地折算。",
+                    buildExternalApiUsageText(),
+                    externalCostLine
+            );
+        }
+
+        DoubaoOfficialCost cost = calculateDoubaoOfficialCost(lastDoubaoUsageStats);
+        return joinLines(
+                "AI 模型用量：输入 " + lastDoubaoUsageStats.inputTokens
+                        + " token，缓存命中 " + lastDoubaoUsageStats.cachedInputTokens
+                        + " token，输出 " + lastDoubaoUsageStats.outputTokens
+                        + " token，总计 " + lastDoubaoUsageStats.totalTokens + " token",
+                "AI 模型折算：" + formatCostAmount(cost.totalCostCny) + " CNY",
+                buildExternalApiUsageText(),
+                externalCostLine,
+                "本地折算合计：" + formatCostAmount(cost.totalCostCny + externalCostCny) + " CNY"
+        );
+    }
+
+    private String buildExternalApiUsageText() {
+        if (currentSerpApiSearchCount <= 0
+                && currentTencentLocationCallCount <= 0
+                && currentLocationGatewayCallCount <= 0) {
+            return "外部接口调用：本次未触发额外付费接口。";
+        }
+        return joinLines(
+                currentSerpApiSearchCount > 0 ? "SerpApi 搜图：" + currentSerpApiSearchCount + " 次" : "",
+                currentTencentLocationCallCount > 0 ? "腾讯定位：" + currentTencentLocationCallCount + " 次" : "",
+                currentLocationGatewayCallCount > 0 ? "地点网关：" + currentLocationGatewayCallCount + " 次" : ""
+        );
+    }
+
+    private double calculateConfiguredExternalApiCostCny() {
+        return currentSerpApiSearchCount * parseBuildConfigDouble(BuildConfig.SERPAPI_COST_CNY_PER_SEARCH)
+                + currentTencentLocationCallCount * parseBuildConfigDouble(BuildConfig.TENCENT_LOCATION_COST_CNY_PER_CALL)
+                + currentLocationGatewayCallCount * parseBuildConfigDouble(BuildConfig.LOCATION_GATEWAY_COST_CNY_PER_CALL);
+    }
+
+    private double parseBuildConfigDouble(@Nullable String value) {
+        if (isBlank(value)) {
+            return 0d;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (Exception ignored) {
+            return 0d;
+        }
+    }
+    private DoubaoOfficialCost calculateDoubaoOfficialCost(DoubaoVisionClient.UsageStats usageStats) {
+        int inputTokens = Math.max(0, usageStats.inputTokens);
+        int cachedInputTokens = Math.max(0, Math.min(usageStats.cachedInputTokens, inputTokens));
+        int billableInputTokens = Math.max(0, inputTokens - cachedInputTokens);
+        int outputTokens = Math.max(0, usageStats.outputTokens);
+
+        double inputPrice = DOUBAO_LITE_TIER_1_INPUT_PRICE_PER_MILLION;
+        double cachedInputPrice = DOUBAO_LITE_TIER_1_CACHED_INPUT_PRICE_PER_MILLION;
+        double outputPrice = DOUBAO_LITE_TIER_1_OUTPUT_PRICE_PER_MILLION;
+        String tierLabel = "输入长度 <= 32K";
+
+        if (inputTokens > DOUBAO_LITE_TIER_2_MAX_INPUT_TOKENS) {
+            inputPrice = DOUBAO_LITE_TIER_3_INPUT_PRICE_PER_MILLION;
+            cachedInputPrice = DOUBAO_LITE_TIER_3_CACHED_INPUT_PRICE_PER_MILLION;
+            outputPrice = DOUBAO_LITE_TIER_3_OUTPUT_PRICE_PER_MILLION;
+            tierLabel = "输入长度 128K-256K";
+        } else if (inputTokens > DOUBAO_LITE_TIER_1_MAX_INPUT_TOKENS) {
+            inputPrice = DOUBAO_LITE_TIER_2_INPUT_PRICE_PER_MILLION;
+            cachedInputPrice = DOUBAO_LITE_TIER_2_CACHED_INPUT_PRICE_PER_MILLION;
+            outputPrice = DOUBAO_LITE_TIER_2_OUTPUT_PRICE_PER_MILLION;
+            tierLabel = "输入长度 32K-128K";
+        }
+
+        double totalCostCny = (billableInputTokens * inputPrice
+                + cachedInputTokens * cachedInputPrice
+                + outputTokens * outputPrice) / 1_000_000d;
+        return new DoubaoOfficialCost(totalCostCny, tierLabel);
     }
 
     private String formatCostAmount(double amount) {
@@ -5631,8 +6057,16 @@ public class MainActivity extends AppCompatActivity {
 
     private int beginNewSearchGeneration() {
         activeSearchGeneration++;
+        resetCurrentUsageCounters();
         clearConfirmedPilgrimageSelection();
         return activeSearchGeneration;
+    }
+
+    private void resetCurrentUsageCounters() {
+        currentSerpApiSearchCount = 0;
+        currentTencentLocationCallCount = 0;
+        currentLocationGatewayCallCount = 0;
+        lastDoubaoUsageStats = null;
     }
 
     private boolean isStaleSearch(int searchGeneration) {
@@ -5724,6 +6158,27 @@ public class MainActivity extends AppCompatActivity {
         return joinLines(
                 "作品名：" + animeName,
                 "暂未拿到完整作品资料；已先使用该作品名作为当前巡礼匹配约束。"
+        );
+    }
+
+    private String buildWorkInfoLoadingText(String animeName) {
+        if (isBlank(animeName)) {
+            return "";
+        }
+        return joinLines(
+                "作品名：" + animeName,
+                "正在从 Bangumi 获取作品资料与封面。"
+        );
+    }
+
+    private String buildWorkInfoUnavailableText(String animeName) {
+        if (isBlank(animeName)) {
+            return "";
+        }
+        return joinLines(
+                "作品名：" + animeName,
+                "暂未连接到 Bangumi 资料；已保留当前作品名和巡礼地点结果。",
+                "如需加载 Bangumi 简介和封面，请在真机开启可访问 Bangumi 的网络或 VPN 后重新识别。"
         );
     }
 

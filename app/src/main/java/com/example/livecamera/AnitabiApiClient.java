@@ -33,11 +33,18 @@ public class AnitabiApiClient {
     private static final String BANGUMI_SEARCH_BASE_URL = "https://api.bgm.tv/search/subject/";
     private static final String BANGUMI_V0_SEARCH_BASE_URL = "https://api.bgm.tv/v0/search/subjects";
     private static final String BANGUMI_SUBJECT_BASE_URL = "https://api.bgm.tv/v0/subjects/";
+    private static final String BANGUMI_USER_AGENT =
+            "ayumu317/LiveCamera-LBS/1.5.0 (Android) (https://github.com/ayumu317/livecamera)";
+    private static final int MIN_BANGUMI_SEARCH_SCORE = 20;
+    private static final int BANGUMI_CONNECT_TIMEOUT_SECONDS = 5;
+    private static final int BANGUMI_READ_TIMEOUT_SECONDS = 6;
+    private static final int BANGUMI_CALL_TIMEOUT_SECONDS = 8;
     private static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json; charset=utf-8");
     private static final Pattern LABEL_PREFIX_PATTERN =
             Pattern.compile("^(动漫名称|动画名称|作品名称|番剧名称)\\s*[：:]\\s*");
 
     private final OkHttpClient okHttpClient;
+    private final OkHttpClient bangumiHttpClient;
     private final Gson gson;
 
     public AnitabiApiClient() {
@@ -45,6 +52,12 @@ public class AnitabiApiClient {
                 .connectTimeout(20, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
+        this.bangumiHttpClient = okHttpClient.newBuilder()
+                .connectTimeout(BANGUMI_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(BANGUMI_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(BANGUMI_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .callTimeout(BANGUMI_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .build();
         this.gson = new Gson();
     }
@@ -150,7 +163,7 @@ public class AnitabiApiClient {
 
         Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "LiveCamera-LBS/1.0 (Android)")
+                .header("User-Agent", BANGUMI_USER_AGENT)
                 .get()
                 .build();
 
@@ -171,7 +184,10 @@ public class AnitabiApiClient {
     }
 
     public void searchBangumiSubjectIdByName(String keyword, ApiCallback<Integer> callback) {
-        searchSubjectIdByName(keyword, false, new ApiCallback<Integer>() {
+        if (callback == null) {
+            return;
+        }
+        searchBangumiV0SubjectIdByName(keyword, new ApiCallback<Integer>() {
             @Override
             public void onSuccess(Integer data) {
                 callback.onSuccess(data);
@@ -179,10 +195,56 @@ public class AnitabiApiClient {
 
             @Override
             public void onFailure(Exception e) {
-                Log.d(TAG, "Bangumi legacy search unavailable: keyword=" + normalizeKeyword(keyword)
+                Log.d(TAG, "Bangumi v0 search unavailable: keyword=" + normalizeKeyword(keyword)
                         + ", reason=" + safeMessage(e, "unknown")
-                        + "; trying v0");
-                searchBangumiV0SubjectIdByName(keyword, callback);
+                        + "; trying legacy search");
+                searchSubjectIdByName(keyword, false, callback);
+            }
+        });
+    }
+
+    public void searchBangumiWorkInfoByName(String keyword, ApiCallback<BangumiLiteResponse> callback) {
+        if (callback == null) {
+            return;
+        }
+        String normalizedKeyword = normalizeKeyword(keyword);
+        if (isBlank(normalizedKeyword)) {
+            callback.onFailure(new IllegalArgumentException("搜索关键词不能为空"));
+            return;
+        }
+        searchBangumiSubjectIdByName(normalizedKeyword, new ApiCallback<Integer>() {
+            @Override
+            public void onSuccess(Integer subjectId) {
+                if (subjectId == null || subjectId <= 0) {
+                    callback.onFailure(new IOException("Bangumi subjectId is invalid"));
+                    return;
+                }
+                getBangumiSubjectInfo(subjectId, new ApiCallback<BangumiSubjectInfo>() {
+                    @Override
+                    public void onSuccess(BangumiSubjectInfo subjectInfo) {
+                        BangumiLiteResponse response = new BangumiLiteResponse();
+                        response.setId(String.valueOf(subjectId));
+                        response.applySubjectInfo(subjectInfo);
+                        if (isBlankValue(response.getSubjectName())
+                                && isBlankValue(response.getSubjectNameCn())
+                                && isBlankValue(response.getSubjectSummary())
+                                && isBlankValue(response.getCover())) {
+                            callback.onFailure(new IOException("Bangumi subject info is empty"));
+                            return;
+                        }
+                        callback.onSuccess(response);
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        callback.onFailure(e);
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                callback.onFailure(e);
             }
         });
     }
@@ -211,6 +273,7 @@ public class AnitabiApiClient {
 
         Request request = new Request.Builder()
                 .url(url)
+                .header("User-Agent", BANGUMI_USER_AGENT)
                 .get()
                 .build();
 
@@ -265,7 +328,7 @@ public class AnitabiApiClient {
         RequestBody body = RequestBody.create(requestObject.toString(), JSON_MEDIA_TYPE);
         Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "LiveCamera-LBS/1.0 (Android)")
+                .header("User-Agent", BANGUMI_USER_AGENT)
                 .post(body)
                 .build();
 
@@ -301,7 +364,7 @@ public class AnitabiApiClient {
             ResponseParser<T> parser,
             ApiCallback<T> callback
     ) {
-        okHttpClient.newCall(request).enqueue(new Callback() {
+        getHttpClientForRequest(request).newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 callback.onFailure(new IOException("网络请求失败: " + safeMessage(e, "请检查网络后重试"), e));
@@ -333,6 +396,12 @@ public class AnitabiApiClient {
                 }
             }
         });
+    }
+
+    private OkHttpClient getHttpClientForRequest(Request request) {
+        HttpUrl url = request != null ? request.url() : null;
+        String host = url != null ? url.host() : "";
+        return "api.bgm.tv".equalsIgnoreCase(host) ? bangumiHttpClient : okHttpClient;
     }
 
     private Exception asException(Type type, Exception exception) {
@@ -405,6 +474,10 @@ public class AnitabiApiClient {
         return value == null || value.trim().isEmpty();
     }
 
+    private static boolean isBlankValue(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
     private Integer findFirstAnitabiAvailableSubjectId(List<BangumiSearchItem> items) {
         if (items == null || items.isEmpty()) {
             return null;
@@ -454,7 +527,14 @@ public class AnitabiApiClient {
         Log.d(TAG, "Bangumi search selected: keyword=" + keyword
                 + ", subjectId=" + bestSubjectId
                 + ", score=" + bestScore);
-        return bestSubjectId > 0 ? bestSubjectId : null;
+        if (bestSubjectId <= 0 || bestScore < MIN_BANGUMI_SEARCH_SCORE) {
+            Log.d(TAG, "Bangumi search rejected: keyword=" + keyword
+                    + ", subjectId=" + bestSubjectId
+                    + ", score=" + bestScore
+                    + ", minScore=" + MIN_BANGUMI_SEARCH_SCORE);
+            return null;
+        }
+        return bestSubjectId;
     }
 
     private int scoreBangumiSearchItem(BangumiSearchItem item, String keyword) {
