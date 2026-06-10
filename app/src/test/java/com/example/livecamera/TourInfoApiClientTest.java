@@ -95,6 +95,41 @@ public class TourInfoApiClientTest {
     }
 
     @Test
+    public void trialStatusBuildsExpectedUrl() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"feature\":\"recognition\",\"registered\":false,\"allowed\":true,\"limit\":3,\"used\":1,\"remaining\":2,\"reset_date\":\"2026-06-10\"}}"));
+
+        Result<TourTrialAccessResult> result = awaitSuccess(
+                callback -> client.getTrialStatus("device-001", TrialAccessManager.FEATURE_RECOGNITION, "", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/app/trial/status?feature=recognition&device_id=device-001", request.getPath());
+        assertTrue(result.data.isAllowed());
+        assertEquals(Integer.valueOf(2), result.data.getRemaining());
+    }
+
+    @Test
+    public void consumeTrialPostsDeviceAndCanSendToken() throws Exception {
+        server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"success\",\"data\":{\"feature\":\"recognition\",\"registered\":true,\"allowed\":true,\"limit\":null,\"used\":0,\"remaining\":null,\"reset_date\":\"2026-06-10\"}}"));
+
+        Result<TourTrialAccessResult> result = awaitSuccess(
+                callback -> client.consumeTrial("device-002", TrialAccessManager.FEATURE_RECOGNITION, "token-trial", callback)
+        );
+        RecordedRequest request = server.takeRequest(1, TimeUnit.SECONDS);
+
+        assertNotNull(request);
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/app/trial/consume", request.getPath());
+        assertEquals("Bearer token-trial", request.getHeader("Authorization"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"device_id\":\"device-002\""));
+        assertTrue(body.contains("\"feature\":\"recognition\""));
+        assertTrue(result.data.isRegistered());
+    }
+
+    @Test
     public void loginPostsCredentialsAndParsesAuthResult() throws Exception {
         server.enqueue(jsonResponse("{\"success\":true,\"code\":200,\"message\":\"登录成功\",\"data\":{\"token\":\"token-123\",\"expires_in\":28800,\"expires_at\":\"2026-05-29T12:00:00Z\",\"user\":{\"id\":7,\"username\":\"traveler\",\"role\":\"user\",\"display_name\":\"旅行者\"}}}"));
 

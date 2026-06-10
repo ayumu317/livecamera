@@ -200,6 +200,7 @@ public class MainActivity extends AppCompatActivity {
     private LocationSearchClient locationSearchClient;
     private TourInfoApiClient tourInfoApiClient;
     private TourAuthSession tourAuthSession;
+    private TrialAccessManager trialAccessManager;
 
     private Uri selectedImageUri;
     private Uri pendingCameraImageUri;
@@ -239,6 +240,8 @@ public class MainActivity extends AppCompatActivity {
     private String lastManualCorrectedAnimeName;
     private String lastManualCorrectedLocationName;
     private String lastCorrectionSyncStatus;
+    private boolean trialAccessCheckInProgress;
+    private boolean bypassTrialGateOnce;
     private List<TourRecognitionAssistCandidate> currentManagementAssistCandidates;
     private ParsedResult currentSpotCandidateParsedResult;
     private AnitabiApiClient.BangumiLiteResponse currentSpotCandidateBangumiLiteResponse;
@@ -396,6 +399,7 @@ public class MainActivity extends AppCompatActivity {
         locationSearchClient = new LocationSearchClient();
         tourInfoApiClient = TourManagementBackendConfig.newClient(this);
         tourAuthSession = new TourAuthSession(this);
+        trialAccessManager = new TrialAccessManager(this);
         initViewState();
         initListeners();
         restoreState(savedInstanceState);
@@ -1055,6 +1059,10 @@ public class MainActivity extends AppCompatActivity {
             renderError("请先从相册选择或拍摄一张图片", null);
             return;
         }
+        ensureRecognitionTrialAccess(() -> startAnimeRematchWithWorkAfterTrialGate(animeName, selectedFromAi, userLocationHint));
+    }
+
+    private void startAnimeRematchWithWorkAfterTrialGate(String animeName, boolean selectedFromAi, @Nullable String userLocationHint) {
         if (selectedFromAi) {
             Log.d(DEBUG_TAG, "selectedAnimeFromAI = " + animeName);
         }
@@ -1451,6 +1459,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startIdentifyFlow() {
+        if (selectedImageUri != null && shouldGateRecognitionRequest()) {
+            ensureRecognitionTrialAccess(() -> {
+                bypassTrialGateOnce = true;
+                startIdentifyFlow();
+            });
+            return;
+        }
         if (selectedImageUri == null) {
             renderError("请先从相册选择或拍摄一张图片", null);
             return;
@@ -6472,6 +6487,90 @@ public class MainActivity extends AppCompatActivity {
         if (afterCostSettled != null) {
             runSafelyOnUiThread(afterCostSettled);
         }
+    }
+
+    private boolean shouldGateRecognitionRequest() {
+        if (bypassTrialGateOnce) {
+            bypassTrialGateOnce = false;
+            return false;
+        }
+        return tourAuthSession == null || !tourAuthSession.isLoggedIn();
+    }
+
+    private void ensureRecognitionTrialAccess(@NonNull Runnable onAllowed) {
+        if (tourAuthSession != null && tourAuthSession.isLoggedIn()) {
+            onAllowed.run();
+            return;
+        }
+        if (trialAccessCheckInProgress) {
+            showToast("正在校验免费试用额度，请稍候");
+            return;
+        }
+        if (trialAccessManager == null) {
+            trialAccessManager = new TrialAccessManager(this);
+        }
+        if (!trialAccessManager.hasRecognitionQuota()) {
+            showTrialLimitDialog();
+            return;
+        }
+        if (tourInfoApiClient == null) {
+            showToast("试用额度暂时无法校验，请登录或稍后重试");
+            return;
+        }
+        trialAccessCheckInProgress = true;
+        if (btnStartMatch != null) {
+            btnStartMatch.setEnabled(false);
+        }
+        showToast("正在校验免费试用额度");
+        String deviceId = trialAccessManager.getDeviceId();
+        tourInfoApiClient.consumeTrial(
+                deviceId,
+                TrialAccessManager.FEATURE_RECOGNITION,
+                getCurrentManagementAuthToken(),
+                new TourInfoApiClient.ApiCallback<TourTrialAccessResult>() {
+                    @Override
+                    public void onSuccess(TourTrialAccessResult data) {
+                        runSafelyOnUiThread(() -> {
+                            finishTrialAccessCheck();
+                            if (data == null || !data.isAllowed()) {
+                                showTrialLimitDialog();
+                                return;
+                            }
+                            TrialAccessManager.TrialSnapshot snapshot = trialAccessManager.markRecognitionConsumed();
+                            Log.d(DEBUG_TAG, "anonymous trial consumed, remaining=" + snapshot.getRemaining());
+                            if (snapshot.getRemaining() > 0) {
+                                showToast("今日免费试用剩余 " + snapshot.getRemaining() + " 次");
+                            }
+                            onAllowed.run();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Exception exception) {
+                        Log.d(DEBUG_TAG, "trial consume failed: " + exception.getMessage(), exception);
+                        runSafelyOnUiThread(() -> {
+                            finishTrialAccessCheck();
+                            showToast("试用额度暂时无法校验，请登录或稍后重试");
+                        });
+                    }
+                }
+        );
+    }
+
+    private void finishTrialAccessCheck() {
+        trialAccessCheckInProgress = false;
+        if (btnStartMatch != null && (pbLoading == null || pbLoading.getVisibility() != View.VISIBLE)) {
+            btnStartMatch.setEnabled(selectedImageUri != null);
+        }
+    }
+
+    private void showTrialLimitDialog() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("今日免费试用已用完")
+                .setMessage("注册/登录后可继续使用识别、作品重匹配和后台学习功能。")
+                .setPositiveButton("登录/注册", (dialog, which) -> openAccountPage())
+                .setNegativeButton("稍后再说", null)
+                .show();
     }
 
     private String getCurrentManagementAppUserId() {

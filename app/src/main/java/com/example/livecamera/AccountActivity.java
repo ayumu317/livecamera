@@ -284,6 +284,11 @@ public class AccountActivity extends AppCompatActivity {
             tvAccountUser.setText("未登录时后台增强会使用 android-local，不影响识别、导航和日记。"
                     + "\n后台：" + currentBackendLabel());
         }
+        if (!loggedIn) {
+            tvAccountStatus.setText("未登录");
+            tvAccountUser.setText("未登录每日可试用 3 次识别；登录后可正常使用识别、后台学习和后续付费权益。"
+                    + "\n后台：" + currentBackendLabel());
+        }
         etAccountUsername.setVisibility(loggedIn ? View.GONE : View.VISIBLE);
         etAccountCredential.setVisibility(loggedIn ? View.GONE : View.VISIBLE);
         btnAccountLogin.setVisibility(loggedIn ? View.GONE : View.VISIBLE);

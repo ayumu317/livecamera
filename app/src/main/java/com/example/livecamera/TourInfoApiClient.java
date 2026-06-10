@@ -263,6 +263,44 @@ public class TourInfoApiClient {
         executeGet(builder.build(), TourRecognitionAssistResponse.class, token, callback);
     }
 
+    public void getTrialStatus(
+            @Nullable String deviceId,
+            @Nullable String feature,
+            @Nullable String token,
+            @Nullable ApiCallback<TourTrialAccessResult> callback
+    ) {
+        if (isBlank(deviceId) && isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("deviceId is empty"));
+            return;
+        }
+        HttpUrl.Builder builder = requireBaseUrl()
+                .addPathSegments("api/app/trial/status")
+                .addQueryParameter("feature", isBlank(feature) ? TrialAccessManager.FEATURE_RECOGNITION : feature.trim());
+        if (!isBlank(deviceId)) {
+            builder.addQueryParameter("device_id", deviceId.trim());
+        }
+        executeGet(builder.build(), TourTrialAccessResult.class, token, callback);
+    }
+
+    public void consumeTrial(
+            @Nullable String deviceId,
+            @Nullable String feature,
+            @Nullable String token,
+            @Nullable ApiCallback<TourTrialAccessResult> callback
+    ) {
+        if (isBlank(deviceId) && isBlank(token)) {
+            notifyFailure(callback, new IllegalArgumentException("deviceId is empty"));
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("device_id", isBlank(deviceId) ? "" : deviceId.trim());
+        payload.put("feature", isBlank(feature) ? TrialAccessManager.FEATURE_RECOGNITION : feature.trim());
+        HttpUrl url = requireBaseUrl()
+                .addPathSegments("api/app/trial/consume")
+                .build();
+        executePost(url, payload, TourTrialAccessResult.class, token, callback);
+    }
+
     public void createRecognitionRecord(
             @NonNull RecognitionRecordPayload payload,
             @Nullable ApiCallback<TourRecognitionRecordResult> callback
