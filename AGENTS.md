@@ -1,54 +1,64 @@
 # Project Agent Notes
 
-## Active Workspaces
+## Current Status
 
-Android APP project:
+This directory is the primary LiveCamera-LBS Android Gradle workspace.
 
-`D:\codex\巡礼`
+LiveCamera-LBS Android APP project:
+
+`D:\codex\livecamera-lbs`
 
 Backend/system project:
 
-`D:\codex\面向旅游巡礼场景的 AI 辅助信息管理系统\Tour-AI-Info-Management-System`
+`D:\codex\Tour-AI-Info-Management-System`
 
-Use the APP path for all future APP edits, builds, tests, secret scans, Android Studio project opening, and backend/system integration work.
+Use this APP path for all future APP edits, builds, tests, secret scans, Android Studio project opening, and backend/system integration work.
 
 Use the backend/system path when an APP-side thread needs to inspect or coordinate with the management system backend, API contracts, tests, deployment config, reports, or online deployment settings.
 
-## Legacy APP Copy
+## Legacy APP Copies
 
-Do not use the previous copy as the working APP project:
+Do not use the previous Android Studio copy as the working APP project:
 
 `C:\Users\s1867\AndroidStudioProjects\livecamera`
 
-That old path is retained only as a historical backup/reference unless the user explicitly asks to inspect it.
+Do not use the non-ASCII migration copy as the primary Gradle workspace:
 
-## Migration Context
+`D:\codex\巡礼`
 
-The APP project was moved from `C:\Users\s1867\AndroidStudioProjects\livecamera` to `D:\codex\巡礼`.
+These old paths are retained only as historical backups or references unless the user explicitly asks to inspect them.
 
-Because the new Windows path contains non-ASCII characters, `gradle.properties` includes:
+## Path And Gradle Test Policy
+
+Use this ASCII-only workspace path for Android Gradle work:
+
+`D:\codex\livecamera-lbs`
+
+Android Gradle Plugin unit tests may fail under non-ASCII Windows paths with `ClassNotFoundException` even when test `.class` files are compiled and `:app:assembleDebug` succeeds. This ASCII workspace is therefore the default APP test/build workspace.
+
+The previous non-ASCII workspace needed:
 
 ```properties
 android.overridePathCheck=true
 ```
 
-Keep this setting unless the project is moved again to an ASCII-only path.
+Do not re-add that override in this ASCII workspace unless a new Gradle error explicitly requires it.
 
-## Opening And Verification
+## Verification
 
-Open `D:\codex\巡礼` directly in Android Studio.
-
-After changes, prefer verifying from this workspace:
+Run these from `D:\codex\livecamera-lbs`:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\scan-secrets.ps1 -Mode WorkingTree
 .\gradlew.bat :app:assembleDebug --console=plain
+.\gradlew.bat :app:testDebugUnitTest --console=plain
 ```
 
-Expected result: secret scan passes and `:app:assembleDebug` reports `BUILD SUCCESSFUL`.
+Expected result: secret scan passes, `:app:assembleDebug` reports `BUILD SUCCESSFUL`, and `:app:testDebugUnitTest` does not fail from path-related class loading errors.
 
-## Compatibility Notes
+## Safety Notes
 
+Do not commit `local.properties`, API keys, tokens, APK/AAB files, or generated build outputs.
 Do not move work back to the old Android Studio path.
 Do not split the legacy single-activity architecture unless explicitly requested.
 Do not change Doubao prompts, backend API contracts, Room schema, or stored API keys/tokens unless explicitly requested.

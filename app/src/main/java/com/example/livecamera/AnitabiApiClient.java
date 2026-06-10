@@ -839,24 +839,48 @@ public class AnitabiApiClient {
             return subjectName;
         }
 
+        public void setSubjectName(String subjectName) {
+            this.subjectName = subjectName;
+        }
+
         public String getSubjectNameCn() {
             return subjectNameCn;
+        }
+
+        public void setSubjectNameCn(String subjectNameCn) {
+            this.subjectNameCn = subjectNameCn;
         }
 
         public String getSubjectSummary() {
             return subjectSummary;
         }
 
+        public void setSubjectSummary(String subjectSummary) {
+            this.subjectSummary = subjectSummary;
+        }
+
         public String getSubjectDate() {
             return subjectDate;
+        }
+
+        public void setSubjectDate(String subjectDate) {
+            this.subjectDate = subjectDate;
         }
 
         public Integer getSubjectEps() {
             return subjectEps;
         }
 
+        public void setSubjectEps(Integer subjectEps) {
+            this.subjectEps = subjectEps;
+        }
+
         public String getSubjectPlatform() {
             return subjectPlatform;
+        }
+
+        public void setSubjectPlatform(String subjectPlatform) {
+            this.subjectPlatform = subjectPlatform;
         }
 
         private static boolean isBlankValue(String value) {

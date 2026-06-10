@@ -67,6 +67,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -94,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREF_PREVIEW_MODE = "preview_mode";
     private static final String PREF_SAVE_ACTION = "save_action";
     private static final String PREF_COLOR_THEME = "color_theme";
+    private static final String PREF_RECOGNITION_DEBUG_INFO = "recognition_debug_info";
     private static final String PREVIEW_FIT = "fit";
     private static final String PREVIEW_FILL = "fill";
     private static final String SAVE_ACTION_STAY = "stay";
@@ -106,6 +108,15 @@ public class MainActivity extends AppCompatActivity {
     private static final long MANAGEMENT_COST_VISIBLE_DELAY_MS = 900L;
     private static final long WORK_INFO_FALLBACK_TIMEOUT_MS = 6500L;
     private static final int MAX_WORK_INFO_SEARCH_NAMES = 4;
+    private static final String PREF_WORK_INFO_CACHE_PREFIX = "work_info_cache_";
+    private static final int WORK_INFO_CACHE_VERSION = 1;
+    private static final int WORK_INFO_PRIORITY_EMPTY = 0;
+    private static final int WORK_INFO_PRIORITY_UNAVAILABLE = 10;
+    private static final int WORK_INFO_PRIORITY_BASIC = 20;
+    private static final int WORK_INFO_PRIORITY_LOADING = 30;
+    private static final int WORK_INFO_PRIORITY_MANAGEMENT = 45;
+    private static final int WORK_INFO_PRIORITY_CACHE = 65;
+    private static final int WORK_INFO_PRIORITY_BANGUMI = 90;
     private static final int DOUBAO_LITE_TIER_1_MAX_INPUT_TOKENS = 32_000;
     private static final int DOUBAO_LITE_TIER_2_MAX_INPUT_TOKENS = 128_000;
     private static final double DOUBAO_LITE_TIER_1_INPUT_PRICE_PER_MILLION = 0.6;
@@ -174,7 +185,9 @@ public class MainActivity extends AppCompatActivity {
     private String previewMode = PREVIEW_FILL;
     private String saveAction = SAVE_ACTION_STAY;
     private String colorTheme = THEME_DEFAULT;
+    private boolean showRecognitionDebugInfo;
     private boolean refreshSettingsOnResume;
+    private int currentWorkInfoPriority = WORK_INFO_PRIORITY_EMPTY;
 
     private ActivityResultLauncher<String> galleryLauncher;
     private ActivityResultLauncher<Uri> cameraLauncher;
@@ -223,6 +236,13 @@ public class MainActivity extends AppCompatActivity {
     private Integer lastManagementRecognitionId;
     private String lastManagementSupplementText;
     private DoubaoVisionClient.UsageStats lastDoubaoUsageStats;
+    private String lastManualCorrectedAnimeName;
+    private String lastManualCorrectedLocationName;
+    private String lastCorrectionSyncStatus;
+    private List<TourRecognitionAssistCandidate> currentManagementAssistCandidates;
+    private ParsedResult currentSpotCandidateParsedResult;
+    private AnitabiApiClient.BangumiLiteResponse currentSpotCandidateBangumiLiteResponse;
+    private List<AnitabiApiClient.PointDetail> currentSpotCandidatePointDetails;
     private int currentSerpApiSearchCount;
     private int currentTencentLocationCallCount;
     private int currentLocationGatewayCallCount;
@@ -743,7 +763,8 @@ public class MainActivity extends AppCompatActivity {
                 "默认识别模式：" + getIdentifyModeLabel(currentIdentifyMode),
                 "图片预览方式：" + getPreviewModeLabel(previewMode),
                 "保存后动作：" + getSaveActionLabel(saveAction),
-                "颜色主题：" + getColorThemeLabel(colorTheme)
+                "颜色主题：" + getColorThemeLabel(colorTheme),
+                "识别调试信息：" + (showRecognitionDebugInfo ? "开启" : "关闭")
         };
         new MaterialAlertDialogBuilder(this)
                 .setTitle("设置")
@@ -756,6 +777,8 @@ public class MainActivity extends AppCompatActivity {
                         openSaveActionSetting();
                     } else if (which == 3) {
                         openColorThemeSetting();
+                    } else if (which == 4) {
+                        toggleRecognitionDebugInfo();
                     }
                 })
                 .setNegativeButton("关闭", null)
@@ -763,6 +786,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void resetResultsForModeSwitch() {
+        clearManualCorrectionContext();
         beginNewSearchGeneration();
         clearLocationRoutingState();
         clearResultDisplay();
@@ -801,6 +825,7 @@ public class MainActivity extends AppCompatActivity {
                 THEME_WARM,
                 THEME_DARK
         );
+        showRecognitionDebugInfo = appSettings.getBoolean(PREF_RECOGNITION_DEBUG_INFO, false);
     }
 
     private void openDefaultModeSetting() {
@@ -878,6 +903,14 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    private void toggleRecognitionDebugInfo() {
+        showRecognitionDebugInfo = !showRecognitionDebugInfo;
+        if (appSettings != null) {
+            appSettings.edit().putBoolean(PREF_RECOGNITION_DEBUG_INFO, showRecognitionDebugInfo).apply();
+        }
+        showToast(showRecognitionDebugInfo ? "识别调试信息已开启" : "识别调试信息已关闭");
     }
 
     private void applyAppSettingsToUi() {
@@ -1003,6 +1036,8 @@ public class MainActivity extends AppCompatActivity {
         }
         Log.d(DEBUG_TAG, "manualAnimeName = " + inputAnimeName);
         Log.d(DEBUG_TAG, "manualLocationName = " + inputLocationName);
+        setManualCorrectionContext(inputAnimeName, inputLocationName, "正在同步后台学习");
+        showCorrectionLearningFeedback(true);
         submitManagementCorrection(inputAnimeName, inputLocationName);
         startAnimeRematchWithWork(animeName, false, inputLocationName);
     }
@@ -1087,6 +1122,8 @@ public class MainActivity extends AppCompatActivity {
             }
             lastParsedResult = parsedResult;
             prepareAnimeRoute(parsedResult, "ANIME");
+            requestManagementRecognitionAssist(parsedResult, searchGeneration);
+            showCorrectionLearningFeedback(false);
             if (hasReliableAnimeLocation(parsedResult)) {
                 selectAnimeCandidateAsCurrentResult(userAnimeName, parsedResult);
                 return;
@@ -1336,6 +1373,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void resetForNewImageSelection() {
+        clearManualCorrectionContext();
         beginNewSearchGeneration();
         clearLocationRoutingState();
         clearResultDisplay();
@@ -1418,6 +1456,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        clearManualCorrectionContext();
         showProcessingPlaceholder();
         updateLoadingState(true);
         lastParsedResult = null;
@@ -1839,7 +1878,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         layoutAnimeCandidateList.removeAllViews();
-        List<String> animeNames = parsedResult != null ? parsedResult.animeNames : null;
+        List<String> animeNames = buildDisplayAnimeCandidates(parsedResult != null ? parsedResult.animeNames : null);
         if (animeNames == null || animeNames.isEmpty()) {
             return;
         }
@@ -1891,7 +1930,19 @@ public class MainActivity extends AppCompatActivity {
         return animeName.contains("全系列")
                 || animeName.contains("系列")
                 || normalized.contains("series")
-                || normalized.contains("franchise");
+                || normalized.contains("franchise")
+                || isBareFranchiseCandidate(animeName);
+    }
+
+    private boolean isBareFranchiseCandidate(String animeName) {
+        String normalized = normalizeAnimeCandidateKey(animeName);
+        return "lovelive".equals(normalized)
+                || "fate".equals(normalized)
+                || "bangdream".equals(normalized)
+                || "bandori".equals(normalized)
+                || "idolmaster".equals(normalized)
+                || "gundam".equals(normalized)
+                || "jojo".equals(normalized);
     }
 
     private void renderSeriesWorkChoiceList(String groupName, ParsedResult parsedResult, boolean directConfirm) {
@@ -1908,8 +1959,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         layoutAnimeCandidateList.removeAllViews();
-        layoutAnimeCandidateList.addView(createCandidateText("请选择具体系列作品", 15, true));
-        layoutAnimeCandidateList.addView(createCandidateText("“全系列”会包含多部作品；先选准确的一部，再结合当前图片重新匹配巡礼地点。", 13, false));
+        layoutAnimeCandidateList.addView(createCandidateText("请选择具体作品", 15, true));
+        layoutAnimeCandidateList.addView(createCandidateText("该候选包含多部同系列作品，请先选择最准确的一部，再结合当前图片匹配巡礼地点。", 13, false));
         for (String seriesName : seriesNames) {
             MaterialCardView cardView = createCandidateCard();
             LinearLayout content = createCandidateCardContent();
@@ -1932,9 +1983,13 @@ public class MainActivity extends AppCompatActivity {
 
     private List<String> collectSeriesWorkCandidates(String groupName, @Nullable ParsedResult parsedResult) {
         List<String> results = new ArrayList<>();
+        String franchiseRoot = getFranchiseRoot(groupName);
         if (parsedResult != null && parsedResult.animeNames != null) {
             for (String candidateName : parsedResult.animeNames) {
-                if (!isBlank(candidateName) && !candidateName.equals(groupName) && !shouldExpandSeriesCandidate(candidateName)) {
+                if (!isBlank(candidateName)
+                        && !candidateName.equals(groupName)
+                        && !shouldExpandSeriesCandidate(candidateName)
+                        && isSameFranchiseCandidate(franchiseRoot, candidateName)) {
                     addKeywordIfPresent(results, candidateName);
                 }
             }
@@ -1943,7 +1998,157 @@ public class MainActivity extends AppCompatActivity {
         if (results.isEmpty() && shouldExpandSeriesCandidate(groupName)) {
             addKeywordIfPresent(results, cleanupSeriesName(groupName));
         }
+        return limitStrings(buildDisplayAnimeCandidates(results), 8);
+    }
+
+    private List<String> buildDisplayAnimeCandidates(@Nullable List<String> rawNames) {
+        List<String> results = new ArrayList<>();
+        if (rawNames == null) {
+            return results;
+        }
+        for (String rawName : rawNames) {
+            if (isBlank(rawName)) {
+                continue;
+            }
+            String candidate = rawName.trim();
+            String candidateKey = normalizeAnimeCandidateKey(candidate);
+            if (isBlank(candidateKey)) {
+                continue;
+            }
+            int existingIndex = indexOfNormalizedAnimeCandidate(results, candidateKey);
+            if (existingIndex >= 0) {
+                results.set(existingIndex, choosePreferredAnimeCandidate(results.get(existingIndex), candidate));
+            } else {
+                addKeywordIfPresent(results, candidate);
+            }
+        }
+        return removeGenericSeriesCandidatesWhenSpecificExists(results);
+    }
+
+    private int indexOfNormalizedAnimeCandidate(List<String> values, String candidateKey) {
+        if (values == null || isBlank(candidateKey)) {
+            return -1;
+        }
+        for (int i = 0; i < values.size(); i++) {
+            if (candidateKey.equals(normalizeAnimeCandidateKey(values.get(i)))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String choosePreferredAnimeCandidate(String currentValue, String candidateValue) {
+        if (isBlank(currentValue)) {
+            return candidateValue;
+        }
+        if (isBlank(candidateValue)) {
+            return currentValue;
+        }
+        boolean currentGeneric = shouldExpandSeriesCandidate(currentValue);
+        boolean candidateGeneric = shouldExpandSeriesCandidate(candidateValue);
+        if (currentGeneric != candidateGeneric) {
+            return candidateGeneric ? currentValue : candidateValue;
+        }
+        boolean currentHasCjk = containsCjk(currentValue);
+        boolean candidateHasCjk = containsCjk(candidateValue);
+        if (currentHasCjk != candidateHasCjk) {
+            return candidateHasCjk ? candidateValue : currentValue;
+        }
+        return candidateValue.length() > currentValue.length() ? candidateValue : currentValue;
+    }
+
+    private List<String> removeGenericSeriesCandidatesWhenSpecificExists(List<String> values) {
+        List<String> results = new ArrayList<>();
+        if (values == null || values.isEmpty()) {
+            return results;
+        }
+        Set<String> rootsWithSpecificCandidates = new HashSet<>();
+        for (String value : values) {
+            String root = getFranchiseRoot(value);
+            if (!isBlank(root) && !shouldExpandSeriesCandidate(value)) {
+                rootsWithSpecificCandidates.add(root);
+            }
+        }
+        for (String value : values) {
+            String root = getFranchiseRoot(value);
+            if (shouldExpandSeriesCandidate(value)
+                    && !isBlank(root)
+                    && rootsWithSpecificCandidates.contains(root)) {
+                continue;
+            }
+            addKeywordIfPresent(results, value);
+        }
         return results;
+    }
+
+    private String normalizeAnimeCandidateKey(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        String normalized = value.toLowerCase(Locale.ROOT)
+                .replace("ラブライブ！", "lovelive")
+                .replace("ラブライブ!", "lovelive")
+                .replace("love live", "lovelive")
+                .replace("lovelive!", "lovelive")
+                .replace("學園", "学园")
+                .replace("校園", "校园")
+                .replace("校园", "学园")
+                .replace("同好會", "同好会")
+                .replace("虹ヶ咲", "虹咲")
+                .replace("虹咲学园校园偶像同好会", "虹咲学园学园偶像同好会")
+                .replace("全系列", "")
+                .replace("系列作品", "")
+                .replace("系列", "")
+                .replace("franchise", "")
+                .replace("series", "");
+        normalized = toSimplifiedChineseTitle(normalized);
+        return normalized
+                .replaceAll("[\\s\\p{Punct}《》「」『』【】（）()\\[\\]·・!！]+", "")
+                .trim();
+    }
+
+    private boolean containsCjk(String value) {
+        return !isBlank(value) && Pattern.compile("[\\u3400-\\u9FFF\\u3040-\\u30FF]").matcher(value).find();
+    }
+
+    private String getFranchiseRoot(String animeName) {
+        if (isBlank(animeName)) {
+            return "";
+        }
+        String normalized = normalizeAnimeCandidateKey(animeName);
+        if (normalized.contains("lovelive") || normalized.contains("虹咲") || normalized.contains("蓮之空")
+                || normalized.contains("莲之空") || normalized.contains("superstar") || normalized.contains("sunshine")) {
+            return "lovelive";
+        }
+        if (normalized.contains("fate") || normalized.contains("命运")) {
+            return "fate";
+        }
+        if (normalized.contains("物语") || normalized.contains("物語")) {
+            return "monogatari";
+        }
+        if (normalized.contains("bangdream") || normalized.contains("bandori")) {
+            return "bangdream";
+        }
+        if (normalized.contains("idolmaster") || normalized.contains("偶像大师") || normalized.contains("偶像大師")) {
+            return "idolmaster";
+        }
+        if (normalized.contains("gundam") || normalized.contains("高达") || normalized.contains("鋼彈")) {
+            return "gundam";
+        }
+        if (normalized.contains("madoka") || normalized.contains("魔法少女小圆") || normalized.contains("魔法少女小圓")) {
+            return "madoka";
+        }
+        if (normalized.contains("evangelion") || normalized.contains("福音战士") || normalized.contains("福音戰士")) {
+            return "evangelion";
+        }
+        if (normalized.contains("jojo")) {
+            return "jojo";
+        }
+        return "";
+    }
+
+    private boolean isSameFranchiseCandidate(String franchiseRoot, String candidateName) {
+        return !isBlank(franchiseRoot) && franchiseRoot.equals(getFranchiseRoot(candidateName));
     }
 
     private List<String> buildWorkInfoSearchNames(String animeName) {
@@ -2065,6 +2270,25 @@ public class MainActivity extends AppCompatActivity {
         return aliases;
     }
 
+    private String toSimplifiedChineseTitle(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        return value
+                .replace("學園", "学园")
+                .replace("校園", "校园")
+                .replace("同好會", "同好会")
+                .replace("養成", "养成")
+                .replace("天氣", "天气")
+                .replace("孤獨", "孤独")
+                .replace("搖滾", "摇滚")
+                .replace("莉可麗絲", "莉可丽丝")
+                .replace("命運", "命运")
+                .replace("物語", "物语")
+                .replace("戰士", "战士")
+                .trim();
+    }
+
     private String toTraditionalChineseTitle(String value) {
         if (isBlank(value)) {
             return "";
@@ -2146,6 +2370,7 @@ public class MainActivity extends AppCompatActivity {
             currentCandidateLocation = locationDisplayName;
             currentCandidateDesc = descriptionText;
             updateCurrentResultSnapshot(animeName, locationDisplayName, descriptionText, null);
+            resetWorkInfoDisplayState();
             showWorkInfoSection(buildBasicWorkInfoText(animeName));
             markAnimeResultPendingConfirmation();
             updateNextOptionButtonState();
@@ -2159,13 +2384,25 @@ public class MainActivity extends AppCompatActivity {
         if (isBlank(animeName) || anitabiApiClient == null) {
             return;
         }
+        resetWorkInfoDisplayState();
         List<String> searchNames = limitWorkInfoSearchNames(buildWorkInfoSearchNames(animeName));
         Log.d(DEBUG_TAG, "work info request: displayAnimeName=" + animeName
                 + ", searchNames=" + searchNames
                 + ", generation=" + searchGeneration);
         runSafelyOnUiThread(() -> {
             if (!isStaleSearch(searchGeneration) && currentResultMode == ResultMode.OVERSEAS) {
-                showWorkInfoSection(buildWorkInfoLoadingText(animeName));
+                if (!showCachedWorkInfoIfAvailable(
+                        animeName,
+                        searchGeneration,
+                        "资料状态：已使用本地缓存，正在后台刷新 Bangumi。",
+                        false
+                )) {
+                    showWorkInfoSection(
+                            buildWorkInfoLoadingText(animeName),
+                            WORK_INFO_PRIORITY_LOADING,
+                            "bangumi-loading"
+                    );
+                }
             }
         });
         requestManagementThemeInfoForWork(animeName, searchGeneration);
@@ -2190,8 +2427,19 @@ public class MainActivity extends AppCompatActivity {
             }
             Log.d(DEBUG_TAG, "workInfo fallback timeout: displayAnimeName=" + animeName
                     + ", generation=" + searchGeneration);
-            showWorkInfoSection(buildWorkInfoUnavailableText(animeName));
-            requestFallbackWorkCover(animeName, searchGeneration);
+            if (!showCachedWorkInfoIfAvailable(
+                    animeName,
+                    searchGeneration,
+                    "资料状态：Bangumi 暂不可达，已使用本地缓存。",
+                    true
+            )) {
+                showWorkInfoSection(
+                        buildWorkInfoUnavailableText(animeName),
+                        WORK_INFO_PRIORITY_UNAVAILABLE,
+                        "bangumi-timeout"
+                );
+                requestFallbackWorkCover(animeName, searchGeneration);
+            }
         }, WORK_INFO_FALLBACK_TIMEOUT_MS);
     }
 
@@ -2225,7 +2473,18 @@ public class MainActivity extends AppCompatActivity {
                         && (isSameWorkTitleForCurrentResult(currentAnimeName, originalAnimeName)
                         || isSameWorkTitleForCurrentResult(confirmedAnimeName, originalAnimeName))) {
                     Log.d(DEBUG_TAG, "workInfo failedReason=all search names exhausted, displayAnimeName=" + originalAnimeName);
-                    showWorkInfoSection(buildWorkInfoUnavailableText(originalAnimeName));
+                    if (!showCachedWorkInfoIfAvailable(
+                            originalAnimeName,
+                            searchGeneration,
+                            "资料状态：未匹配到新的 Bangumi 结果，已使用本地缓存。",
+                            true
+                    )) {
+                        showWorkInfoSection(
+                                buildWorkInfoUnavailableText(originalAnimeName),
+                                WORK_INFO_PRIORITY_UNAVAILABLE,
+                                "bangumi-exhausted"
+                        );
+                    }
                 }
             });
             requestManagementThemeInfoForWork(originalAnimeName, searchGeneration);
@@ -2329,7 +2588,7 @@ public class MainActivity extends AppCompatActivity {
                                 + animeName
                                 + ", themeName=" + candidate.getThemeName()
                                 + ", locationName=" + candidate.getLocationName());
-                        showWorkInfoSection(workInfo);
+                        showWorkInfoSection(workInfo, WORK_INFO_PRIORITY_MANAGEMENT, "management-assist-work-info");
                     }
                 });
             }
@@ -2470,7 +2729,12 @@ public class MainActivity extends AppCompatActivity {
                     + ", selectedNameCn=" + (bangumiLiteResponse != null ? bangumiLiteResponse.getSubjectNameCn() : null)
                     + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(bangumiLiteResponse)
                     + ", workImageUrl=" + workImageUrl);
-            showWorkInfoSection(buildWorkInfoSectionText(animeName, bangumiLiteResponse));
+            cacheWorkInfo(animeName, searchName, bangumiLiteResponse);
+            showWorkInfoSection(
+                    buildWorkInfoSectionText(animeName, bangumiLiteResponse),
+                    WORK_INFO_PRIORITY_BANGUMI,
+                    "bangumi-detail"
+            );
             boolean showedWorkCover = showWorkCoverImage(workImageUrl);
             if (!isBlank(enrichedDescription) && !enrichedDescription.equals(currentDesc)) {
                 currentDesc = enrichedDescription;
@@ -2496,10 +2760,45 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestFallbackWorkCover(String animeName, @Nullable String searchName, int searchGeneration) {
-        if (isBlank(animeName) || serpApiClient == null) {
+        if (isBlank(animeName)) {
             return;
         }
         String coverSearchName = chooseFirstNonBlank(searchName, animeName);
+        String cachedCoverUrl = getCachedWorkCoverUrl(animeName);
+        if (isBlank(cachedCoverUrl) && !isBlank(searchName)) {
+            cachedCoverUrl = getCachedWorkCoverUrl(searchName);
+        }
+        if (!isBlank(cachedCoverUrl)) {
+            String finalCachedCoverUrl = cachedCoverUrl;
+            runSafelyOnUiThread(() -> {
+                if (isStaleSearch(searchGeneration)
+                        || currentResultMode != ResultMode.OVERSEAS
+                        || (!isSameWorkTitleForCurrentResult(currentAnimeName, animeName)
+                        && !isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName))) {
+                    Log.d(DEBUG_TAG, "work cover cache skipped: displayAnimeName=" + animeName
+                            + ", currentAnimeName=" + currentAnimeName
+                            + ", searchName=" + coverSearchName
+                            + ", stale=" + isStaleSearch(searchGeneration));
+                    return;
+                }
+                boolean showedWorkCover = showWorkCoverImage(finalCachedCoverUrl);
+                boolean showedReferenceImage = showWorkImageIfPresent(finalCachedCoverUrl);
+                Log.d(DEBUG_TAG, "work cover cache applied: displayAnimeName=" + animeName
+                        + ", searchName=" + coverSearchName
+                        + ", showedWorkCover=" + showedWorkCover
+                        + ", showedReferenceImage=" + showedReferenceImage);
+                if (showedWorkCover || showedReferenceImage) {
+                    currentReferenceUrl = finalCachedCoverUrl;
+                    if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+                        confirmedReferenceUrl = finalCachedCoverUrl;
+                    }
+                }
+            });
+            return;
+        }
+        if (serpApiClient == null) {
+            return;
+        }
         Log.d(DEBUG_TAG, "work cover fallback request: displayAnimeName=" + animeName
                 + ", searchName=" + coverSearchName
                 + ", generation=" + searchGeneration);
@@ -2510,7 +2809,8 @@ public class MainActivity extends AppCompatActivity {
                 runSafelyOnUiThread(() -> {
                     if (isStaleSearch(searchGeneration)
                             || currentResultMode != ResultMode.OVERSEAS
-                            || !isSameWorkTitleForCurrentResult(currentAnimeName, animeName)) {
+                            || (!isSameWorkTitleForCurrentResult(currentAnimeName, animeName)
+                            && !isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName))) {
                         Log.d(DEBUG_TAG, "work cover fallback skipped: displayAnimeName=" + animeName
                                 + ", currentAnimeName=" + currentAnimeName
                                 + ", searchName=" + coverSearchName
@@ -2526,6 +2826,7 @@ public class MainActivity extends AppCompatActivity {
                             + ", showedWorkCover=" + showedWorkCover
                             + ", showedReferenceImage=" + showedReferenceImage);
                     if (showedWorkCover || showedReferenceImage) {
+                        cacheWorkCoverUrl(animeName, coverSearchName, imageUrl);
                         currentReferenceUrl = imageUrl;
                         if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
                             confirmedReferenceUrl = imageUrl;
@@ -2541,6 +2842,222 @@ public class MainActivity extends AppCompatActivity {
                         + ", reason=" + safeMessage(e, "unknown"));
             }
         });
+    }
+
+    private boolean showCachedWorkInfoIfAvailable(
+            String animeName,
+            int searchGeneration,
+            @Nullable String statusText,
+            boolean requestCoverIfMissing
+    ) {
+        if (isBlank(animeName)
+                || isStaleSearch(searchGeneration)
+                || currentResultMode != ResultMode.OVERSEAS
+                || (!isSameWorkTitleForCurrentResult(currentAnimeName, animeName)
+                && !isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName))) {
+            return false;
+        }
+        AnitabiApiClient.BangumiLiteResponse cachedResponse = readCachedWorkInfo(animeName);
+        if (cachedResponse == null) {
+            return false;
+        }
+        Log.d(DEBUG_TAG, "workInfo cache applied: displayAnimeName=" + animeName
+                + ", hasDetailedWorkInfo=" + hasDetailedWorkInfo(cachedResponse)
+                + ", workImageUrl=" + getBangumiWorkImageUrl(cachedResponse));
+        showWorkInfoSection(
+                buildCachedWorkInfoSectionText(animeName, cachedResponse, statusText),
+                WORK_INFO_PRIORITY_CACHE,
+                "work-info-cache"
+        );
+        String workImageUrl = getBangumiWorkImageUrl(cachedResponse);
+        boolean showedWorkCover = showWorkCoverImage(workImageUrl);
+        boolean showedReferenceImage = showWorkImageIfPresent(workImageUrl);
+        if (showedWorkCover || showedReferenceImage) {
+            currentReferenceUrl = workImageUrl;
+            if (!isBlank(confirmedAnimeName) && isSameWorkTitleForCurrentResult(confirmedAnimeName, animeName)) {
+                confirmedReferenceUrl = workImageUrl;
+            }
+        } else if (requestCoverIfMissing) {
+            requestFallbackWorkCover(animeName, searchGeneration);
+        }
+        return true;
+    }
+
+    @Nullable
+    private AnitabiApiClient.BangumiLiteResponse readCachedWorkInfo(String animeName) {
+        JsonObject cacheObject = readCachedWorkInfoObject(animeName);
+        if (cacheObject == null) {
+            return null;
+        }
+        AnitabiApiClient.BangumiLiteResponse response = new AnitabiApiClient.BangumiLiteResponse();
+        response.setId(getJsonString(cacheObject, "id"));
+        response.setCn(getJsonString(cacheObject, "cn"));
+        response.setTitle(getJsonString(cacheObject, "title"));
+        response.setCover(getJsonString(cacheObject, "cover"));
+        response.setPointsLength(getJsonString(cacheObject, "pointsLength"));
+        response.setSubjectName(getJsonString(cacheObject, "subjectName"));
+        response.setSubjectNameCn(getJsonString(cacheObject, "subjectNameCn"));
+        response.setSubjectSummary(getJsonString(cacheObject, "subjectSummary"));
+        response.setSubjectDate(getJsonString(cacheObject, "subjectDate"));
+        response.setSubjectPlatform(getJsonString(cacheObject, "subjectPlatform"));
+        Integer eps = getJsonInteger(cacheObject, "subjectEps");
+        if (eps != null) {
+            response.setSubjectEps(eps);
+        }
+        return hasDetailedWorkInfo(response) ? response : null;
+    }
+
+    @Nullable
+    private JsonObject readCachedWorkInfoObject(String animeName) {
+        if (isBlank(animeName)) {
+            return null;
+        }
+        SharedPreferences preferences = getAppSettings();
+        if (preferences == null) {
+            return null;
+        }
+        String raw = preferences.getString(getWorkInfoCacheKey(animeName), "");
+        if (isBlank(raw)) {
+            return null;
+        }
+        try {
+            JsonElement element = JsonParser.parseString(raw);
+            return element != null && element.isJsonObject() ? element.getAsJsonObject() : null;
+        } catch (Exception exception) {
+            Log.d(DEBUG_TAG, "workInfo cache parse failed: displayAnimeName=" + animeName
+                    + ", reason=" + safeMessage(exception, "unknown"));
+            return null;
+        }
+    }
+
+    private void cacheWorkInfo(
+            String animeName,
+            @Nullable String searchName,
+            @Nullable AnitabiApiClient.BangumiLiteResponse response
+    ) {
+        if (response == null || !hasDetailedWorkInfo(response)) {
+            return;
+        }
+        JsonObject cacheObject = new JsonObject();
+        cacheObject.addProperty("version", WORK_INFO_CACHE_VERSION);
+        cacheObject.addProperty("cachedAt", System.currentTimeMillis());
+        addJsonPropertyIfNotBlank(cacheObject, "displayName", animeName);
+        addJsonPropertyIfNotBlank(cacheObject, "searchName", searchName);
+        addJsonPropertyIfNotBlank(cacheObject, "id", response.getId());
+        addJsonPropertyIfNotBlank(cacheObject, "cn", response.getCn());
+        addJsonPropertyIfNotBlank(cacheObject, "title", response.getTitle());
+        addJsonPropertyIfNotBlank(cacheObject, "cover", getBangumiWorkImageUrl(response));
+        addJsonPropertyIfNotBlank(cacheObject, "pointsLength", response.getPointsLength());
+        addJsonPropertyIfNotBlank(cacheObject, "subjectName", response.getSubjectName());
+        addJsonPropertyIfNotBlank(cacheObject, "subjectNameCn", response.getSubjectNameCn());
+        addJsonPropertyIfNotBlank(cacheObject, "subjectSummary", response.getSubjectSummary());
+        addJsonPropertyIfNotBlank(cacheObject, "subjectDate", response.getSubjectDate());
+        addJsonPropertyIfNotBlank(cacheObject, "subjectPlatform", response.getSubjectPlatform());
+        if (response.getSubjectEps() != null && response.getSubjectEps() > 0) {
+            cacheObject.addProperty("subjectEps", response.getSubjectEps());
+        }
+        saveWorkInfoCache(cacheObject.toString(),
+                animeName,
+                searchName,
+                response.getSubjectNameCn(),
+                response.getSubjectName(),
+                response.getCn(),
+                response.getTitle());
+    }
+
+    private void cacheWorkCoverUrl(String animeName, @Nullable String searchName, String imageUrl) {
+        if (isBlank(animeName) || isBlank(imageUrl)) {
+            return;
+        }
+        JsonObject cacheObject = readCachedWorkInfoObject(animeName);
+        if (cacheObject == null) {
+            cacheObject = new JsonObject();
+            cacheObject.addProperty("version", WORK_INFO_CACHE_VERSION);
+            addJsonPropertyIfNotBlank(cacheObject, "displayName", animeName);
+            addJsonPropertyIfNotBlank(cacheObject, "searchName", searchName);
+            addJsonPropertyIfNotBlank(cacheObject, "subjectNameCn", animeName);
+        }
+        cacheObject.addProperty("cachedAt", System.currentTimeMillis());
+        addJsonPropertyIfNotBlank(cacheObject, "cover", imageUrl);
+        saveWorkInfoCache(cacheObject.toString(), animeName, searchName, getJsonString(cacheObject, "subjectNameCn"));
+    }
+
+    private void cacheBasicWorkInfoFromManagement(
+            String animeName,
+            @Nullable String themeType,
+            @Nullable String description,
+            @Nullable String coverUrl
+    ) {
+        if (isBlank(animeName)
+                || (isBlank(themeType) && isBlank(description) && isBlank(coverUrl))) {
+            return;
+        }
+        AnitabiApiClient.BangumiLiteResponse response = new AnitabiApiClient.BangumiLiteResponse();
+        response.setCn(animeName);
+        response.setSubjectNameCn(animeName);
+        response.setSubjectPlatform(themeType);
+        response.setSubjectSummary(description);
+        response.setCover(coverUrl);
+        cacheWorkInfo(animeName, animeName, response);
+    }
+
+    @Nullable
+    private String getCachedWorkCoverUrl(String animeName) {
+        AnitabiApiClient.BangumiLiteResponse cachedResponse = readCachedWorkInfo(animeName);
+        return cachedResponse == null ? null : getBangumiWorkImageUrl(cachedResponse);
+    }
+
+    private void saveWorkInfoCache(String json, String... names) {
+        if (isBlank(json) || names == null) {
+            return;
+        }
+        SharedPreferences preferences = getAppSettings();
+        if (preferences == null) {
+            return;
+        }
+        SharedPreferences.Editor editor = preferences.edit();
+        Set<String> savedKeys = new HashSet<>();
+        for (String name : names) {
+            String key = getWorkInfoCacheKey(name);
+            if (!isBlank(key) && savedKeys.add(key)) {
+                editor.putString(key, json);
+            }
+        }
+        editor.apply();
+    }
+
+    private SharedPreferences getAppSettings() {
+        if (appSettings == null) {
+            appSettings = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        }
+        return appSettings;
+    }
+
+    private String getWorkInfoCacheKey(String animeName) {
+        String normalized = normalizeWorkTitleForCurrentResult(animeName);
+        if (isBlank(normalized) && !isBlank(animeName)) {
+            normalized = animeName.trim().toLowerCase(Locale.ROOT);
+        }
+        return isBlank(normalized) ? "" : PREF_WORK_INFO_CACHE_PREFIX + normalized;
+    }
+
+    private void addJsonPropertyIfNotBlank(JsonObject jsonObject, String key, String value) {
+        if (jsonObject != null && !isBlank(key) && !isBlank(value)) {
+            jsonObject.addProperty(key, value.trim());
+        }
+    }
+
+    @Nullable
+    private Integer getJsonInteger(JsonObject jsonObject, String key) {
+        if (jsonObject == null || key == null || !jsonObject.has(key) || jsonObject.get(key).isJsonNull()) {
+            return null;
+        }
+        try {
+            return jsonObject.get(key).getAsInt();
+        } catch (Exception ignored) {
+            int parsed = parseIntSafely(getJsonString(jsonObject, key));
+            return parsed > 0 ? parsed : null;
+        }
     }
 
     private String getWorkInfoApplySkipReason(String displayAnimeName, int searchGeneration) {
@@ -2609,6 +3126,12 @@ public class MainActivity extends AppCompatActivity {
         spotCandidateListExpanded = false;
         currentSpotCandidateCount = 0;
         updateNextStepHint();
+    }
+
+    private void clearSpotCandidateContext() {
+        currentSpotCandidateParsedResult = null;
+        currentSpotCandidateBangumiLiteResponse = null;
+        currentSpotCandidatePointDetails = null;
     }
 
     private void setSpotCandidateListExpanded(boolean expanded) {
@@ -3134,6 +3657,9 @@ public class MainActivity extends AppCompatActivity {
             AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
             List<AnitabiApiClient.PointDetail> pointDetails
     ) {
+        currentSpotCandidateParsedResult = parsedResult;
+        currentSpotCandidateBangumiLiteResponse = bangumiLiteResponse;
+        currentSpotCandidatePointDetails = pointDetails == null ? null : new ArrayList<>(pointDetails);
         List<SpotCandidate> sortedCandidates = buildSortedSpotCandidates(parsedResult, pointDetails);
         Log.d(DEBUG_TAG, "sorted spot candidates count = " + sortedCandidates.size());
         runSafelyOnUiThread(() -> {
@@ -3305,12 +3831,16 @@ public class MainActivity extends AppCompatActivity {
                 lines.add("集数/场景：待确认");
             }
             lines.add("参考图：" + (!isBlank(point.getImage()) ? "有" : "无"));
-            lines.add(candidate.reason);
+            lines.add(buildSpotCandidateDisplayReason(parsedResult, point));
+            if (showRecognitionDebugInfo) {
+                lines.add(buildSpotCandidateDebugReason(candidate));
+            }
             content.addView(createCandidateText(joinLines(lines), 13, false));
 
             MaterialButton actionButton = createCandidateActionButton("选择此地点");
             actionButton.setOnClickListener(view -> {
                 Log.d(DEBUG_TAG, "selected spot = " + chooseFirstNonBlank(point.getName(), point.getId()));
+                Log.d(DEBUG_TAG, "selected spot reason = " + candidate.reason);
                 String selectedAnimeName = chooseFirstNonBlank(getUserSelectedAnimeName(parsedResult), parsedResult.animeTitle);
                 String selectedSpotName = chooseFirstNonBlank(point.getName(), point.getId());
                 setConfirmedPilgrimageSelection(
@@ -3326,6 +3856,34 @@ public class MainActivity extends AppCompatActivity {
             cardView.addView(content);
             layoutSpotCandidateList.addView(cardView);
         }
+    }
+
+    private void refreshSpotCandidateListWithManagementAssist(int searchGeneration) {
+        if (isStaleSearch(searchGeneration)
+                || currentSpotCandidateParsedResult == null
+                || currentSpotCandidateBangumiLiteResponse == null) {
+            return;
+        }
+        List<AnitabiApiClient.PointDetail> pointDetails = currentSpotCandidatePointDetails == null
+                ? new ArrayList<>()
+                : new ArrayList<>(currentSpotCandidatePointDetails);
+        List<SpotCandidate> sortedCandidates = buildSortedSpotCandidates(currentSpotCandidateParsedResult, pointDetails);
+        if (sortedCandidates == null || sortedCandidates.isEmpty()) {
+            return;
+        }
+        boolean keepExpanded = spotCandidateListExpanded;
+        hasSpotCandidateOptions = true;
+        currentSpotCandidateCount = sortedCandidates.size();
+        renderSpotCandidateList(
+                currentSpotCandidateParsedResult,
+                currentSpotCandidateBangumiLiteResponse,
+                sortedCandidates,
+                pointDetails.size()
+        );
+        setSpotCandidateListExpanded(keepExpanded);
+        updateNextOptionButtonState();
+        updateNextStepHint();
+        Log.d(DEBUG_TAG, "spot candidate list refreshed with management assist, count=" + sortedCandidates.size());
     }
 
     private String getBangumiWorkImageUrl(@Nullable AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse) {
@@ -3364,22 +3922,111 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showWorkInfoSection(String workInfoText) {
+        showWorkInfoSection(workInfoText, inferWorkInfoPriority(workInfoText), "auto");
+    }
+
+    private void showWorkInfoSection(String workInfoText, int priority, String source) {
         if (layoutWorkInfo == null || tvWorkInfo == null || isBlank(workInfoText)) {
             return;
         }
+        int safePriority = Math.max(WORK_INFO_PRIORITY_UNAVAILABLE, priority);
+        if (currentWorkInfoPriority > safePriority) {
+            Log.d(DEBUG_TAG, "workInfo display skipped: source=" + source
+                    + ", incomingPriority=" + safePriority
+                    + ", currentPriority=" + currentWorkInfoPriority
+                    + ", reason=avoid downgrade");
+            return;
+        }
+        Log.d(DEBUG_TAG, "workInfo display applied: source=" + source
+                + ", priority=" + safePriority
+                + ", hasCoverVisible=" + (ivWorkCover != null && ivWorkCover.getVisibility() == View.VISIBLE)
+                + ", textPreview=" + buildLogPreview(workInfoText));
+        currentWorkInfoPriority = safePriority;
         tvWorkInfo.setText(workInfoText);
         layoutWorkInfo.setVisibility(currentResultMode == ResultMode.OVERSEAS ? View.VISIBLE : View.GONE);
     }
 
+    private int inferWorkInfoPriority(String workInfoText) {
+        if (isBlank(workInfoText)) {
+            return WORK_INFO_PRIORITY_EMPTY;
+        }
+        if (workInfoText.contains("中文名：")
+                || workInfoText.contains("原名：")
+                || workInfoText.contains("放送日期：")
+                || workInfoText.contains("集数：")) {
+            return WORK_INFO_PRIORITY_BANGUMI;
+        }
+        if (workInfoText.contains("已使用本地缓存")) {
+            return WORK_INFO_PRIORITY_CACHE;
+        }
+        if (workInfoText.contains("后台学习")
+                || workInfoText.contains("后台候选")
+                || workInfoText.contains("后台辅助")) {
+            return WORK_INFO_PRIORITY_MANAGEMENT;
+        }
+        if (workInfoText.contains("正在从 Bangumi")) {
+            return WORK_INFO_PRIORITY_LOADING;
+        }
+        if (workInfoText.contains("Bangumi 网络不可达")
+                || workInfoText.contains("暂未连接到 Bangumi")
+                || workInfoText.contains("未匹配到准确作品")) {
+            return WORK_INFO_PRIORITY_UNAVAILABLE;
+        }
+        if (workInfoText.contains("作品名：")) {
+            return WORK_INFO_PRIORITY_BASIC;
+        }
+        return WORK_INFO_PRIORITY_BASIC;
+    }
+
+    private String buildLogPreview(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        String preview = value.replace('\n', ' ').trim();
+        return preview.length() > 80 ? preview.substring(0, 80) + "..." : preview;
+    }
+
     private boolean showWorkCoverImage(String imageUrl) {
         if (isBlank(imageUrl) || ivWorkCover == null || layoutWorkInfo == null) {
+            Log.d(DEBUG_TAG, "work cover display skipped: imageUrlBlank=" + isBlank(imageUrl)
+                    + ", hasCoverView=" + (ivWorkCover != null));
             return false;
         }
         layoutWorkInfo.setVisibility(currentResultMode == ResultMode.OVERSEAS ? View.VISIBLE : View.GONE);
         ivWorkCover.setVisibility(View.VISIBLE);
+        Log.d(DEBUG_TAG, "work cover display request: imageUrl=" + imageUrl);
         Glide.with(this)
                 .load(imageUrl)
                 .centerCrop()
+                .listener(new RequestListener<Drawable>() {
+                    @Override
+                    public boolean onLoadFailed(
+                            @Nullable GlideException e,
+                            Object model,
+                            Target<Drawable> target,
+                            boolean isFirstResource
+                    ) {
+                        Log.d(DEBUG_TAG, "work cover display failed: imageUrl=" + imageUrl
+                                + ", reason=" + (e != null ? e.getMessage() : "unknown"));
+                        if (ivWorkCover != null) {
+                            ivWorkCover.setVisibility(View.VISIBLE);
+                        }
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onResourceReady(
+                            Drawable resource,
+                            Object model,
+                            Target<Drawable> target,
+                            com.bumptech.glide.load.DataSource dataSource,
+                            boolean isFirstResource
+                    ) {
+                        Log.d(DEBUG_TAG, "work cover display loaded: imageUrl=" + imageUrl
+                                + ", dataSource=" + dataSource);
+                        return false;
+                    }
+                })
                 .into(ivWorkCover);
         return true;
     }
@@ -3395,12 +4042,21 @@ public class MainActivity extends AppCompatActivity {
             ivWorkCover.setVisibility(View.GONE);
             ivWorkCover.setImageDrawable(null);
         }
+        currentWorkInfoPriority = WORK_INFO_PRIORITY_EMPTY;
+    }
+
+    private void resetWorkInfoDisplayState() {
+        currentWorkInfoPriority = WORK_INFO_PRIORITY_EMPTY;
     }
 
     private void showBackendCostSection(String costText) {
         if (layoutBackendCost == null || tvBackendCost == null || isBlank(costText)) {
+            Log.d(DEBUG_TAG, "backend cost display skipped: hasLayout=" + (layoutBackendCost != null)
+                    + ", hasTextView=" + (tvBackendCost != null)
+                    + ", blankText=" + isBlank(costText));
             return;
         }
+        Log.d(DEBUG_TAG, "backend cost display applied: " + buildLogPreview(costText));
         tvBackendCost.setText(removeCostTitle(costText));
         layoutBackendCost.setVisibility(View.VISIBLE);
         scrollToView(layoutBackendCost);
@@ -3507,23 +4163,28 @@ public class MainActivity extends AppCompatActivity {
             List<AnitabiApiClient.PointDetail> pointDetails
     ) {
         List<SpotCandidate> candidates = new ArrayList<>();
-        if (pointDetails == null) {
-            return candidates;
-        }
-        for (AnitabiApiClient.PointDetail pointDetail : pointDetails) {
-            if (pointDetail == null) {
-                continue;
+        if (pointDetails != null) {
+            for (AnitabiApiClient.PointDetail pointDetail : pointDetails) {
+                if (pointDetail == null) {
+                    continue;
+                }
+                int score = scoreSpotCandidate(parsedResult, pointDetail);
+                String reason = buildSpotCandidateReason(parsedResult, pointDetail);
+                candidates.add(new SpotCandidate(pointDetail, score, reason));
             }
-            int score = scoreSpotCandidate(parsedResult, pointDetail);
-            String reason = buildSpotCandidateReason(parsedResult, pointDetail);
-            candidates.add(new SpotCandidate(pointDetail, score, reason));
         }
+        addManagementAssistSpotCandidates(parsedResult, candidates);
         candidates.sort((left, right) -> Integer.compare(right.score, left.score));
+        logSortedSpotCandidates(candidates);
         return candidates;
     }
 
     private int scoreSpotCandidate(ParsedResult parsedResult, AnitabiApiClient.PointDetail pointDetail) {
         int score = 0;
+        if (matchesManualCorrectedLocation(pointDetail)) {
+            score += 80;
+        }
+        score += scoreManagementAssistMatch(pointDetail);
         List<String> keywords = collectSpotMatchKeywords(parsedResult);
         for (String keyword : keywords) {
             score += scoreLocationMatch(keyword, pointDetail.getName(), pointDetail.getOrigin());
@@ -3534,9 +4195,68 @@ public class MainActivity extends AppCompatActivity {
         return score;
     }
 
+    private void addManagementAssistSpotCandidates(
+            ParsedResult parsedResult,
+            List<SpotCandidate> candidates
+    ) {
+        if (candidates == null || currentManagementAssistCandidates == null || currentManagementAssistCandidates.isEmpty()) {
+            return;
+        }
+        for (TourRecognitionAssistCandidate assistCandidate : currentManagementAssistCandidates) {
+            if (assistCandidate == null || isBlank(assistCandidate.getLocationName())) {
+                continue;
+            }
+            if (hasEquivalentSpotCandidate(candidates, assistCandidate)) {
+                continue;
+            }
+            AnitabiApiClient.PointDetail pointDetail = createPointDetailFromManagementAssist(assistCandidate);
+            int score = scoreSpotCandidate(parsedResult, pointDetail) + 35;
+            String reason = buildSpotCandidateReason(parsedResult, pointDetail);
+            candidates.add(new SpotCandidate(pointDetail, score, reason));
+        }
+    }
+
+    private boolean hasEquivalentSpotCandidate(
+            List<SpotCandidate> candidates,
+            TourRecognitionAssistCandidate assistCandidate
+    ) {
+        if (candidates == null || assistCandidate == null || isBlank(assistCandidate.getLocationName())) {
+            return false;
+        }
+        for (SpotCandidate candidate : candidates) {
+            if (candidate != null && scoreLocationMatch(
+                    assistCandidate.getLocationName(),
+                    candidate.pointDetail != null ? candidate.pointDetail.getName() : null,
+                    candidate.pointDetail != null ? candidate.pointDetail.getOrigin() : null
+            ) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private AnitabiApiClient.PointDetail createPointDetailFromManagementAssist(TourRecognitionAssistCandidate candidate) {
+        AnitabiApiClient.PointDetail pointDetail = new AnitabiApiClient.PointDetail();
+        pointDetail.setId(chooseFirstNonBlank(
+                candidate.getLocationId() != null ? "management-location-" + candidate.getLocationId() : null,
+                candidate.getLearnedCandidateId() != null ? "management-learned-" + candidate.getLearnedCandidateId() : null,
+                "management-assist"
+        ));
+        pointDetail.setName(candidate.getLocationName());
+        pointDetail.setOrigin(joinWithSeparator(limitStrings(Arrays.asList(
+                candidate.getAddress(),
+                candidate.getCity(),
+                candidate.getCountry(),
+                candidate.getRecommendReason()
+        ), 4), " / "));
+        pointDetail.setEp("");
+        return pointDetail;
+    }
+
     private String buildSpotCandidateReason(ParsedResult parsedResult, AnitabiApiClient.PointDetail pointDetail) {
         List<String> matchedLocationTerms = new ArrayList<>();
         List<String> matchedVisualTerms = new ArrayList<>();
+        List<String> learningLabels = buildManagementAssistSpotLabels(pointDetail);
         if (parsedResult != null) {
             addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.locationName);
             addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.spotSearchKeywords);
@@ -3546,6 +4266,12 @@ public class MainActivity extends AppCompatActivity {
         addMatchedTerms(matchedLocationTerms, pointDetail, currentSpotSearchKeywords);
 
         List<String> lines = new ArrayList<>();
+        if (matchesManualCorrectedLocation(pointDetail)) {
+            lines.add("命中你的地点纠正：" + lastManualCorrectedLocationName);
+        }
+        if (!learningLabels.isEmpty()) {
+            lines.add("后台学习：" + joinWithSeparator(learningLabels, " / "));
+        }
         if (!matchedLocationTerms.isEmpty()) {
             lines.add("匹配原因：命中地点线索：" + joinWithSeparator(limitStrings(matchedLocationTerms, 3), " / "));
         }
@@ -3559,6 +4285,161 @@ public class MainActivity extends AppCompatActivity {
             lines.add("参考图：可用于人工核对");
         }
         return joinLines(lines);
+    }
+
+    private String buildSpotCandidateDisplayReason(
+            ParsedResult parsedResult,
+            AnitabiApiClient.PointDetail pointDetail
+    ) {
+        List<String> tags = new ArrayList<>();
+        if (matchesManualCorrectedLocation(pointDetail)) {
+            addKeywordIfPresent(tags, "命中你的地点纠正");
+        }
+        List<String> learningLabels = buildManagementAssistSpotLabels(pointDetail);
+        if (!learningLabels.isEmpty()) {
+            addKeywordIfPresent(tags, joinWithSeparator(limitStrings(learningLabels, 2), " / "));
+        }
+        List<String> matchedLocationTerms = new ArrayList<>();
+        List<String> matchedVisualTerms = new ArrayList<>();
+        if (parsedResult != null) {
+            addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.locationName);
+            addMatchedTerms(matchedLocationTerms, pointDetail, parsedResult.spotSearchKeywords);
+            addMatchedTerms(matchedVisualTerms, pointDetail, parsedResult.visualKeywords);
+        }
+        addMatchedTerms(matchedLocationTerms, pointDetail, currentSpotSearchKeywords);
+        addMatchedTerms(matchedVisualTerms, pointDetail, currentVisualKeywords);
+        if (!matchedLocationTerms.isEmpty()) {
+            addKeywordIfPresent(tags, "命中 AI 地点线索：" + joinWithSeparator(limitStrings(matchedLocationTerms, 2), " / "));
+        }
+        if (!matchedVisualTerms.isEmpty()) {
+            addKeywordIfPresent(tags, "命中视觉关键词：" + joinWithSeparator(limitStrings(matchedVisualTerms, 2), " / "));
+        }
+        if (isManagementAssistPoint(pointDetail)) {
+            addKeywordIfPresent(tags, "后台学习候选");
+        }
+        if (!isBlank(pointDetail != null ? pointDetail.getImage() : null)) {
+            addKeywordIfPresent(tags, "有参考图");
+        }
+        if (tags.isEmpty()) {
+            addKeywordIfPresent(tags, "待人工确认");
+        }
+        return "推荐依据：" + joinWithSeparator(limitStrings(tags, 4), " / ");
+    }
+
+    private String buildSpotCandidateDebugReason(SpotCandidate candidate) {
+        if (candidate == null || candidate.pointDetail == null) {
+            return "";
+        }
+        AnitabiApiClient.PointDetail pointDetail = candidate.pointDetail;
+        return joinLines(
+                "调试信息",
+                "score=" + candidate.score
+                        + ", id=" + chooseFirstNonBlank(pointDetail.getId(), "")
+                        + ", source=" + (isManagementAssistPoint(pointDetail) ? "management-assist" : "anitabi"),
+                candidate.reason
+        );
+    }
+
+    private boolean isManagementAssistPoint(@Nullable AnitabiApiClient.PointDetail pointDetail) {
+        return pointDetail != null
+                && !isBlank(pointDetail.getId())
+                && pointDetail.getId().startsWith("management-");
+    }
+
+    private void logSortedSpotCandidates(@Nullable List<SpotCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            Log.d(DEBUG_TAG, "spot candidate ranking empty");
+            return;
+        }
+        int maxCount = Math.min(5, candidates.size());
+        for (int i = 0; i < maxCount; i++) {
+            SpotCandidate candidate = candidates.get(i);
+            if (candidate == null || candidate.pointDetail == null) {
+                continue;
+            }
+            Log.d(DEBUG_TAG, "spot candidate rank " + (i + 1)
+                    + ": name=" + chooseFirstNonBlank(candidate.pointDetail.getName(), candidate.pointDetail.getId())
+                    + ", score=" + candidate.score
+                    + ", source=" + (isManagementAssistPoint(candidate.pointDetail) ? "management-assist" : "anitabi")
+                    + ", reason=" + candidate.reason);
+        }
+    }
+
+    private boolean matchesManualCorrectedLocation(@Nullable AnitabiApiClient.PointDetail pointDetail) {
+        return pointDetail != null
+                && !isBlank(lastManualCorrectedLocationName)
+                && scoreLocationMatch(lastManualCorrectedLocationName, pointDetail.getName(), pointDetail.getOrigin()) > 0;
+    }
+
+    private int scoreManagementAssistMatch(@Nullable AnitabiApiClient.PointDetail pointDetail) {
+        if (pointDetail == null || currentManagementAssistCandidates == null || currentManagementAssistCandidates.isEmpty()) {
+            return 0;
+        }
+        int score = 0;
+        for (TourRecognitionAssistCandidate candidate : currentManagementAssistCandidates) {
+            if (!matchesManagementAssistCandidate(pointDetail, candidate)) {
+                continue;
+            }
+            int candidateScore = 12;
+            if (isUserCorrectionCandidate(candidate)) {
+                candidateScore += 40;
+            }
+            if (isLearnedCandidate(candidate)) {
+                candidateScore += 28;
+            }
+            if (candidate != null && candidate.getGlobalCorrectionCount() > 0) {
+                candidateScore += Math.min(candidate.getGlobalCorrectionCount() * 8, 32);
+            }
+            if (candidate != null && candidate.getUserConfirmedCount() > 0) {
+                candidateScore += Math.min(candidate.getUserConfirmedCount() * 10, 30);
+            }
+            score = Math.max(score, candidateScore);
+        }
+        return score;
+    }
+
+    private List<String> buildManagementAssistSpotLabels(@Nullable AnitabiApiClient.PointDetail pointDetail) {
+        List<String> labels = new ArrayList<>();
+        if (pointDetail == null || currentManagementAssistCandidates == null) {
+            return labels;
+        }
+        for (TourRecognitionAssistCandidate candidate : currentManagementAssistCandidates) {
+            if (!matchesManagementAssistCandidate(pointDetail, candidate)) {
+                continue;
+            }
+            if (isUserCorrectionCandidate(candidate)) {
+                addKeywordIfPresent(labels, "我的纠正");
+            }
+            if (isLearnedCandidate(candidate)) {
+                addKeywordIfPresent(labels, "后台学习推荐");
+            }
+            if (candidate != null && candidate.getGlobalCorrectionCount() > 0) {
+                addKeywordIfPresent(labels, "全局纠正参考");
+            }
+            if (candidate != null && !isBlank(candidate.getLocationName())) {
+                addKeywordIfPresent(labels, candidate.getLocationName());
+            }
+        }
+        return labels;
+    }
+
+    private boolean matchesManagementAssistCandidate(
+            @Nullable AnitabiApiClient.PointDetail pointDetail,
+            @Nullable TourRecognitionAssistCandidate candidate
+    ) {
+        if (pointDetail == null || candidate == null) {
+            return false;
+        }
+        return scoreLocationMatch(candidate.getLocationName(), pointDetail.getName(), pointDetail.getOrigin()) > 0
+                || scoreLocationMatch(candidate.getAddress(), pointDetail.getName(), pointDetail.getOrigin()) > 0;
+    }
+
+    private boolean isUserCorrectionCandidate(@Nullable TourRecognitionAssistCandidate candidate) {
+        return candidate != null && candidate.getUserCorrectionCount() > 0;
+    }
+
+    private boolean isLearnedCandidate(@Nullable TourRecognitionAssistCandidate candidate) {
+        return candidate != null && "learned".equalsIgnoreCase(chooseFirstNonBlank(candidate.getCandidateSource(), ""));
     }
 
     private void addMatchedTerms(List<String> target, AnitabiApiClient.PointDetail pointDetail, String keyword) {
@@ -3598,6 +4479,7 @@ public class MainActivity extends AppCompatActivity {
 
     private List<String> collectSpotMatchKeywords(ParsedResult parsedResult) {
         List<String> keywords = new ArrayList<>();
+        addKeywordIfPresent(keywords, lastManualCorrectedLocationName);
         if (parsedResult != null) {
             addKeywordIfPresent(keywords, parsedResult.locationName);
             addKeywordsIfPresent(keywords, parsedResult.visualKeywords);
@@ -3605,7 +4487,21 @@ public class MainActivity extends AppCompatActivity {
         }
         addKeywordsIfPresent(keywords, currentVisualKeywords);
         addKeywordsIfPresent(keywords, currentSpotSearchKeywords);
+        addManagementAssistKeywords(keywords);
         return keywords;
+    }
+
+    private void addManagementAssistKeywords(List<String> keywords) {
+        if (keywords == null || currentManagementAssistCandidates == null) {
+            return;
+        }
+        for (TourRecognitionAssistCandidate candidate : currentManagementAssistCandidates) {
+            if (candidate == null) {
+                continue;
+            }
+            addKeywordIfPresent(keywords, candidate.getLocationName());
+            addKeywordIfPresent(keywords, candidate.getAddress());
+        }
     }
 
     private void addKeywordsIfPresent(List<String> target, @Nullable List<String> values) {
@@ -4970,6 +5866,8 @@ public class MainActivity extends AppCompatActivity {
         currentVisualKeywords = null;
         currentSpotSearchKeywords = null;
         currentTriedSubjectIds = null;
+        currentManagementAssistCandidates = null;
+        clearSpotCandidateContext();
         allowManualAnimeRematch = false;
         clearConfirmedPilgrimageSelection();
         clearAnimeCandidateViews();
@@ -5177,7 +6075,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         String keyword = chooseFirstNonBlank(
+                lastManualCorrectedLocationName,
                 parsedResult.locationName,
+                lastManualCorrectedAnimeName,
                 parsedResult.animeTitle,
                 parsedResult.animeNames != null && !parsedResult.animeNames.isEmpty()
                         ? parsedResult.animeNames.get(0)
@@ -5219,7 +6119,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         String keyword = chooseFirstNonBlank(
+                lastManualCorrectedLocationName,
                 parsedResult.locationName,
+                lastManualCorrectedAnimeName,
                 parsedResult.animeTitle,
                 parsedResult.animeNames != null && !parsedResult.animeNames.isEmpty()
                         ? parsedResult.animeNames.get(0)
@@ -5235,17 +6137,30 @@ public class MainActivity extends AppCompatActivity {
                 if (isStaleSearch(searchGeneration) || data == null || data.getItems() == null || data.getItems().isEmpty()) {
                     return;
                 }
+                currentManagementAssistCandidates = new ArrayList<>(data.getItems());
                 TourRecognitionAssistCandidate candidate = data.getItems().get(0);
+                Log.d(DEBUG_TAG, "management assist candidates count=" + currentManagementAssistCandidates.size()
+                        + ", firstLocation=" + candidate.getLocationName()
+                        + ", userCorrections=" + candidate.getUserCorrectionCount()
+                        + ", globalCorrections=" + candidate.getGlobalCorrectionCount());
                 String supplement = buildManagementAssistSupplement(candidate);
                 requestManagementLocationDetail(candidate, searchGeneration);
                 if (isBlank(supplement)) {
+                    runSafelyOnUiThread(() -> {
+                        if (!isStaleSearch(searchGeneration)) {
+                            showCorrectionLearningFeedback(false);
+                            refreshSpotCandidateListWithManagementAssist(searchGeneration);
+                        }
+                    });
                     return;
                 }
                 runSafelyOnUiThread(() -> {
                     if (isStaleSearch(searchGeneration)) {
                         return;
                     }
+                    showCorrectionLearningFeedback(false);
                     addManagementSupplementSection(supplement);
+                    refreshSpotCandidateListWithManagementAssist(searchGeneration);
                 });
             }
 
@@ -5299,6 +6214,7 @@ public class MainActivity extends AppCompatActivity {
             @Nullable Runnable afterCostSettled
     ) {
         if (tourInfoApiClient == null) {
+            Log.d(DEBUG_TAG, "management record create skipped: client missing");
             runSafelyOnUiThread(() -> showBackendCostSection(buildManagementCostUnavailableText(
                     "后台客户端未初始化，已跳过计费同步。"
             )));
@@ -5342,6 +6258,14 @@ public class MainActivity extends AppCompatActivity {
                 .put("status", "saved");
         addDoubaoUsagePayload(payload);
         addExternalApiUsagePayload(payload);
+        Log.d(DEBUG_TAG, "management record create start: anime=" + animeName
+                + ", location=" + locationName
+                + ", mode=" + (recognitionMode != null ? recognitionMode.name() : "null")
+                + ", domestic=" + isDomesticRecord
+                + ", hasDoubaoUsage=" + (lastDoubaoUsageStats != null && lastDoubaoUsageStats.hasUsage())
+                + ", serpApiCount=" + currentSerpApiSearchCount
+                + ", tencentLocationCount=" + currentTencentLocationCallCount
+                + ", locationGatewayCount=" + currentLocationGatewayCallCount);
         tourInfoApiClient.createRecognitionRecord(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<TourRecognitionRecordResult>() {
             @Override
             public void onSuccess(TourRecognitionRecordResult data) {
@@ -5379,6 +6303,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void submitManagementCorrection(@Nullable String correctedAnimeName, @Nullable String correctedLocationName) {
         if (tourInfoApiClient == null || (isBlank(correctedAnimeName) && isBlank(correctedLocationName))) {
+            lastCorrectionSyncStatus = "后台学习暂未同步但已继续匹配";
+            Log.d(DEBUG_TAG, "management correction unavailable: client missing or empty correction");
+            showCorrectionLearningFeedback(true);
             return;
         }
         String originalTheme = chooseFirstNonBlank(
@@ -5403,14 +6330,81 @@ public class MainActivity extends AppCompatActivity {
         tourInfoApiClient.submitCorrection(payload, getCurrentManagementAuthToken(), new TourInfoApiClient.ApiCallback<Void>() {
             @Override
             public void onSuccess(Void data) {
-                Log.d(DEBUG_TAG, "management correction submitted");
+                lastCorrectionSyncStatus = buildCorrectionSubmittedStatus(correctedAnimeName, correctedLocationName);
+                Log.d(DEBUG_TAG, "management correction submitted: anime=" + correctedAnimeName
+                        + ", location=" + correctedLocationName);
+                runSafelyOnUiThread(() -> showCorrectionLearningFeedback(true));
             }
 
             @Override
             public void onFailure(@NonNull Exception exception) {
+                lastCorrectionSyncStatus = "后台学习暂未同步但已继续匹配";
                 Log.d(DEBUG_TAG, "management correction skipped: " + exception.getMessage());
+                runSafelyOnUiThread(() -> showCorrectionLearningFeedback(true));
             }
         });
+    }
+
+    private void setManualCorrectionContext(
+            @Nullable String correctedAnimeName,
+            @Nullable String correctedLocationName,
+            @Nullable String syncStatus
+    ) {
+        lastManualCorrectedAnimeName = normalizeOptionalText(correctedAnimeName);
+        lastManualCorrectedLocationName = normalizeOptionalText(correctedLocationName);
+        lastCorrectionSyncStatus = chooseFirstNonBlank(syncStatus, "");
+        currentManagementAssistCandidates = null;
+    }
+
+    private void clearManualCorrectionContext() {
+        lastManualCorrectedAnimeName = null;
+        lastManualCorrectedLocationName = null;
+        lastCorrectionSyncStatus = null;
+        currentManagementAssistCandidates = null;
+    }
+
+    private String normalizeOptionalText(@Nullable String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private String buildCorrectionSubmittedStatus(@Nullable String correctedAnimeName, @Nullable String correctedLocationName) {
+        boolean hasAnime = !isBlank(correctedAnimeName);
+        boolean hasLocation = !isBlank(correctedLocationName);
+        if (hasAnime && hasLocation) {
+            return "作品纠正和地点纠正已提交";
+        }
+        if (hasLocation) {
+            return "地点纠正已提交";
+        }
+        return "作品纠正已提交";
+    }
+
+    private void showCorrectionLearningFeedback(boolean showToast) {
+        String feedbackText = buildCorrectionLearningFeedbackText();
+        if (isBlank(feedbackText)) {
+            return;
+        }
+        addOrReplaceManagementSupplementSection("纠正学习反馈", feedbackText);
+        if (showToast && !isBlank(lastCorrectionSyncStatus)) {
+            showToast(lastCorrectionSyncStatus);
+        }
+    }
+
+    private String buildCorrectionLearningFeedbackText() {
+        if (isBlank(lastManualCorrectedAnimeName)
+                && isBlank(lastManualCorrectedLocationName)
+                && isBlank(lastCorrectionSyncStatus)) {
+            return "";
+        }
+        return joinLines(
+                "纠正学习反馈",
+                isBlank(lastManualCorrectedAnimeName) ? "" : "作品纠正：" + lastManualCorrectedAnimeName,
+                isBlank(lastManualCorrectedLocationName) ? "" : "地点纠正：" + lastManualCorrectedLocationName,
+                isBlank(lastManualCorrectedLocationName) ? "" : "本次地点纠正已参与当前候选排序",
+                currentManagementAssistCandidates == null || currentManagementAssistCandidates.isEmpty()
+                        ? "" : "后台学习候选：" + currentManagementAssistCandidates.size() + " 个",
+                isBlank(lastCorrectionSyncStatus) ? "" : "状态：" + lastCorrectionSyncStatus
+        );
     }
 
     private String buildCorrectionReason(@Nullable String correctedAnimeName, @Nullable String correctedLocationName) {
@@ -5452,7 +6446,12 @@ public class MainActivity extends AppCompatActivity {
                 String costText = buildManagementCostSupplement(data);
                 runSafelyOnUiThread(() -> {
                     showBackendCostSection(costText);
-                    Log.d(DEBUG_TAG, "cost loaded: recognitionId=" + recognitionId);
+                    Log.d(DEBUG_TAG, "cost loaded: recognitionId=" + recognitionId
+                            + ", aiModel=" + data.getAiModelCost()
+                            + ", map=" + data.getMapServiceCost()
+                            + ", other=" + data.getOtherApiCost()
+                            + ", total=" + data.getTotalCost()
+                            + ", currency=" + data.getCurrency());
                 });
                 finishAfterManagementCostWait(afterCostSettled);
             }
@@ -5563,6 +6562,12 @@ public class MainActivity extends AppCompatActivity {
             showWorkInfoSection(workInfo);
         }
         String coverUrl = theme.getCoverUrl();
+        cacheBasicWorkInfoFromManagement(
+                chooseFirstNonBlank(theme.getThemeName(), currentAnimeName, confirmedAnimeName),
+                theme.getThemeType(),
+                theme.getDescription(),
+                coverUrl
+        );
         showWorkCoverImage(coverUrl);
         if (showWorkImageIfPresent(coverUrl)) {
             currentReferenceUrl = coverUrl;
@@ -5815,6 +6820,32 @@ public class MainActivity extends AppCompatActivity {
         appendManagementSupplementToDescription(lastManagementSupplementText);
     }
 
+    private void addOrReplaceManagementSupplementSection(String sectionTitle, String sectionText) {
+        if (isBlank(sectionTitle) || isBlank(sectionText)) {
+            return;
+        }
+        lastManagementSupplementText = removeManagementSupplementSection(lastManagementSupplementText, sectionTitle);
+        addManagementSupplementSection(sectionText);
+    }
+
+    private String removeManagementSupplementSection(@Nullable String text, String sectionTitle) {
+        if (isBlank(text) || isBlank(sectionTitle)) {
+            return "";
+        }
+        String[] sections = text.trim().split("\\n\\s*\\n");
+        List<String> keptSections = new ArrayList<>();
+        for (String section : sections) {
+            if (isBlank(section)) {
+                continue;
+            }
+            String trimmed = section.trim();
+            if (!trimmed.startsWith(sectionTitle)) {
+                keptSections.add(trimmed);
+            }
+        }
+        return joinWithSeparator(keptSections, "\n\n");
+    }
+
     private void appendManagementSupplementToDescription(@Nullable String supplementText) {
         if (isBlank(supplementText)) {
             return;
@@ -5838,6 +6869,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (markerIndex < 0) {
             markerIndex = currentText.indexOf("本次估算成本");
+        }
+        if (markerIndex < 0) {
+            markerIndex = currentText.indexOf("纠正学习反馈");
         }
         String baseText = markerIndex >= 0
                 ? currentText.substring(0, markerIndex).trim()
@@ -6151,12 +7185,25 @@ public class MainActivity extends AppCompatActivity {
         return buildBasicWorkInfoText(selectedAnimeName);
     }
 
+    private String buildCachedWorkInfoSectionText(
+            String selectedAnimeName,
+            AnitabiApiClient.BangumiLiteResponse bangumiLiteResponse,
+            @Nullable String statusText
+    ) {
+        String workInfoText = buildWorkInfoSectionText(selectedAnimeName, bangumiLiteResponse);
+        if (isBlank(statusText)) {
+            return workInfoText;
+        }
+        return joinLines(workInfoText, "", statusText);
+    }
+
     private String buildBasicWorkInfoText(String animeName) {
         if (isBlank(animeName)) {
             return "";
         }
         return joinLines(
                 "作品名：" + animeName,
+                "资料状态：已使用基础作品名兜底。",
                 "暂未拿到完整作品资料；已先使用该作品名作为当前巡礼匹配约束。"
         );
     }
@@ -6167,7 +7214,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return joinLines(
                 "作品名：" + animeName,
-                "正在从 Bangumi 获取作品资料与封面。"
+                "资料状态：正在从 Bangumi 获取作品资料与封面。"
         );
     }
 
@@ -6177,7 +7224,8 @@ public class MainActivity extends AppCompatActivity {
         }
         return joinLines(
                 "作品名：" + animeName,
-                "暂未连接到 Bangumi 资料；已保留当前作品名和巡礼地点结果。",
+                "资料状态：Bangumi 网络不可达或未匹配到准确作品。",
+                "已保留当前作品名和巡礼地点结果，并会尝试使用后台学习或图片搜索补充封面。",
                 "如需加载 Bangumi 简介和封面，请在真机开启可访问 Bangumi 的网络或 VPN 后重新识别。"
         );
     }

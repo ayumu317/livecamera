@@ -25,6 +25,7 @@ public class SettingsActivity extends AppCompatActivity {
     private static final String PREF_PREVIEW_MODE = "preview_mode";
     private static final String PREF_SAVE_ACTION = "save_action";
     private static final String PREF_COLOR_THEME = "color_theme";
+    private static final String PREF_RECOGNITION_DEBUG_INFO = "recognition_debug_info";
     private static final String PREVIEW_FIT = "fit";
     private static final String PREVIEW_FILL = "fill";
     private static final String SAVE_ACTION_STAY = "stay";
@@ -37,6 +38,7 @@ public class SettingsActivity extends AppCompatActivity {
     private SharedPreferences settings;
     private MaterialCardView rowDefaultMode;
     private MaterialCardView rowPreviewMode;
+    private MaterialCardView rowRecognitionDebug;
     private MaterialCardView rowSaveAction;
     private MaterialCardView rowColorTheme;
     private MaterialCardView rowManagementBackend;
@@ -67,6 +69,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnSettingsBack.setOnClickListener(view -> finish());
         rowDefaultMode = findViewById(R.id.rowDefaultMode);
         rowPreviewMode = findViewById(R.id.rowPreviewMode);
+        rowRecognitionDebug = findViewById(R.id.rowRecognitionDebug);
         rowSaveAction = findViewById(R.id.rowSaveAction);
         rowColorTheme = findViewById(R.id.rowColorTheme);
         rowManagementBackend = findViewById(R.id.rowManagementBackend);
@@ -76,6 +79,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void initListeners() {
         rowDefaultMode.setOnClickListener(view -> chooseDefaultMode());
         rowPreviewMode.setOnClickListener(view -> choosePreviewMode());
+        rowRecognitionDebug.setOnClickListener(view -> toggleRecognitionDebugInfo());
         rowSaveAction.setOnClickListener(view -> chooseSaveAction());
         rowColorTheme.setOnClickListener(view -> chooseColorTheme());
         rowManagementBackend.setOnClickListener(view -> openManagementBackendDialog());
@@ -94,6 +98,12 @@ public class SettingsActivity extends AppCompatActivity {
                 "图片预览方式",
                 "完整显示适合确认构图，填充裁剪更像封面",
                 getPreviewModeLabel(getPreviewModeValue())
+        );
+        bindSettingRow(
+                rowRecognitionDebug,
+                "识别调试信息",
+                "显示候选排序来源、纠正命中和后台学习推荐依据",
+                getRecognitionDebugLabel()
         );
         bindSettingRow(
                 rowSaveAction,
@@ -152,6 +162,13 @@ public class SettingsActivity extends AppCompatActivity {
         String[] labels = new String[] {"默认蓝紫", "清爽青绿", "暖色旅行", "深色预览"};
         String[] values = new String[] {THEME_DEFAULT, THEME_MINT, THEME_WARM, THEME_DARK};
         showChoiceDialog("颜色主题", labels, values, getColorThemeValue(), PREF_COLOR_THEME);
+    }
+
+    private void toggleRecognitionDebugInfo() {
+        boolean enabled = !isRecognitionDebugEnabled();
+        settings.edit().putBoolean(PREF_RECOGNITION_DEBUG_INFO, enabled).apply();
+        refreshSettingRows();
+        Toast.makeText(this, enabled ? "识别调试信息已开启" : "识别调试信息已关闭", Toast.LENGTH_SHORT).show();
     }
 
     private void openManagementBackendDialog() {
@@ -256,6 +273,14 @@ public class SettingsActivity extends AppCompatActivity {
 
     private String getColorThemeValue() {
         return settings.getString(PREF_COLOR_THEME, THEME_DEFAULT);
+    }
+
+    private boolean isRecognitionDebugEnabled() {
+        return settings.getBoolean(PREF_RECOGNITION_DEBUG_INFO, false);
+    }
+
+    private String getRecognitionDebugLabel() {
+        return isRecognitionDebugEnabled() ? "开启" : "关闭";
     }
 
     private String getManagementBackendLabel() {
