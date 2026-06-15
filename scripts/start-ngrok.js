@@ -4,11 +4,45 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const NGROK_API_URL = process.env.NGROK_API_URL || "http://127.0.0.1:4040/api/tunnels";
-const BACKEND_PORT = process.env.NGROK_BACKEND_PORT || "8080";
+const PROJECT_PROPERTIES = readProjectProperties();
+const NGROK_API_URL = configValue("NGROK_API_URL", "http://127.0.0.1:4040/api/tunnels");
+const BACKEND_PORT = configValue("NGROK_BACKEND_PORT", "8080");
+const NGROK_DOMAIN = normalizeDomain(configValue("NGROK_DOMAIN", ""));
+const NGROK_TUNNEL_NAME = configValue("NGROK_TUNNEL_NAME", "");
 const PROPERTY_NAME = "NGROK_BASE_URL";
-const START_TIMEOUT_MS = Number(process.env.NGROK_START_TIMEOUT_MS || 30000);
+const START_TIMEOUT_MS = Number(configValue("NGROK_START_TIMEOUT_MS", "30000"));
 const POLL_INTERVAL_MS = 1000;
+
+function readProjectProperties() {
+  const propertiesPath = path.join(PROJECT_ROOT, "local.properties");
+  if (!fs.existsSync(propertiesPath)) {
+    return {};
+  }
+  return fs.readFileSync(propertiesPath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .reduce((result, line) => {
+      const separator = line.indexOf("=");
+      if (separator > 0) {
+        const key = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim();
+        result[key] = value;
+      }
+      return result;
+    }, {});
+}
+
+function configValue(name, fallback) {
+  return process.env[name] || PROJECT_PROPERTIES[name] || fallback;
+}
+
+function normalizeDomain(value) {
+  return (value || "")
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+}
 
 function requestJson(url) {
   return new Promise((resolve, reject) => {
@@ -43,6 +77,9 @@ function getHttpsPublicUrl(tunnelsResponse) {
     ? tunnelsResponse.tunnels
     : [];
   const tunnel = tunnels.find((item) => {
+    if (NGROK_DOMAIN) {
+      return item.public_url === `https://${NGROK_DOMAIN}`;
+    }
     return typeof item.public_url === "string" && item.public_url.startsWith("https://");
   });
   return tunnel ? tunnel.public_url.replace(/\/+$/, "") : "";
@@ -57,7 +94,8 @@ async function readCurrentPublicUrl() {
 }
 
 function startNgrok() {
-  const child = spawn("ngrok", ["http", BACKEND_PORT], {
+  const args = buildNgrokArgs();
+  const child = spawn("ngrok", args, {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
@@ -66,6 +104,16 @@ function startNgrok() {
     console.error(`Failed to start ngrok: ${error.message}`);
   });
   child.unref();
+}
+
+function buildNgrokArgs() {
+  if (NGROK_TUNNEL_NAME) {
+    return ["start", NGROK_TUNNEL_NAME];
+  }
+  if (NGROK_DOMAIN) {
+    return ["http", "--domain", NGROK_DOMAIN, BACKEND_PORT];
+  }
+  return ["http", BACKEND_PORT];
 }
 
 async function waitForPublicUrl() {
@@ -173,7 +221,7 @@ async function main() {
   if (publicUrl) {
     console.log(`Reusing existing ngrok tunnel: ${publicUrl}`);
   } else {
-    console.log(`Starting ngrok: ngrok http ${BACKEND_PORT}`);
+    console.log(`Starting ngrok: ngrok ${buildNgrokArgs().join(" ")}`);
     startNgrok();
     publicUrl = await waitForPublicUrl();
     console.log(`ngrok tunnel is ready: ${publicUrl}`);

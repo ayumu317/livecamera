@@ -11,6 +11,16 @@ val localProperties = Properties().apply {
     }
 }
 
+fun buildConfigBoolean(name: String, defaultValue: Boolean = false): Boolean {
+    val value = (project.findProperty(name) as String?)
+        ?: localProperties.getProperty(name)
+        ?: return defaultValue
+    return value.equals("true", ignoreCase = true)
+            || value == "1"
+            || value.equals("yes", ignoreCase = true)
+            || value.equals("on", ignoreCase = true)
+}
+
 fun buildConfigString(name: String, defaultValue: String = ""): String {
     val value = (project.findProperty(name) as String?)
         ?: localProperties.getProperty(name)
@@ -104,5 +114,7 @@ val startNgrok by tasks.registering(Exec::class) {
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {
-    dependsOn(startNgrok)
+    if (buildConfigBoolean("ENABLE_NGROK_PREBUILD", false)) {
+        dependsOn(startNgrok)
+    }
 }
