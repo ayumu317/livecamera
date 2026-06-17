@@ -7,7 +7,7 @@
 **LiveCamera-LBS** is an Android scene-matching assistant for real-world anime pilgrimage and travel discovery.  
 Take or upload a photo, let multimodal AI understand the scene, then continue through anime pilgrimage matching, domestic travel recognition, map navigation, and a local check-in diary.
 
-Current version: **v1.5.0**  
+Current version: **v2.0**
 [Download latest APK](https://github.com/ayumu317/livecamera/releases/latest)
 
 ## Feature Blocks
@@ -47,7 +47,7 @@ Prioritizes anime pilgrimage logic. Even if the image contains real buildings, t
 
 Focuses on Chinese landmarks, city icons, architecture, and natural scenery. This mode uses the domestic travel result path and avoids anime work or pilgrimage spot APIs.
 
-## v1.5.0 Highlights
+## v2.0 Highlights
 
 - Added an independent settings page.
 - Added a feature guide page for new users.

@@ -13,6 +13,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -120,7 +121,7 @@ public class DoubaoVisionClient {
     }
 
     public void identifyLocation(String base64Image, @Nullable double[] gpsLatLng, String mode, Callback callback) {
-        String normalizedMode = mode == null ? "auto" : mode.trim().toLowerCase();
+        String normalizedMode = mode == null ? "auto" : mode.trim().toLowerCase(Locale.ROOT);
         String prompt;
         if ("anime".equals(normalizedMode)) {
             prompt = buildAnimeOnlyPrompt(gpsLatLng);

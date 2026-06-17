@@ -30,6 +30,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -390,6 +391,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         applyWindowInsets();
         bindViews();
+        registerBackHandling();
         loadAppSettings();
         initActivityResultLaunchers();
         doubaoVisionClient = new DoubaoVisionClient();
@@ -426,13 +428,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-            return;
-        }
-        super.onBackPressed();
+    private void registerBackHandling() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawer(GravityCompat.START);
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+                setEnabled(true);
+            }
+        });
     }
 
     @Override
@@ -7474,7 +7482,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return value
                 .replaceAll("[\\s\\p{Punct}【】「」『』（）()·・、，。:：-]", "")
-                .toLowerCase();
+                .toLowerCase(Locale.ROOT);
     }
 
     private int countSharedCharacters(String left, String right) {

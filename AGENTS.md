@@ -10,7 +10,7 @@ LiveCamera-LBS Android APP project:
 
 Backend/system project:
 
-`D:\codex\Tour-AI-Info-Management-System`
+`D:\codex\面向旅游巡礼场景的 AI 辅助信息管理系统\Tour-AI-Info-Management-System`
 
 Use this APP path for all future APP edits, builds, tests, secret scans, Android Studio project opening, and backend/system integration work.
 

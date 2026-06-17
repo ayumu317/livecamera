@@ -13,6 +13,7 @@ import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -34,7 +35,7 @@ public class AnitabiApiClient {
     private static final String BANGUMI_V0_SEARCH_BASE_URL = "https://api.bgm.tv/v0/search/subjects";
     private static final String BANGUMI_SUBJECT_BASE_URL = "https://api.bgm.tv/v0/subjects/";
     private static final String BANGUMI_USER_AGENT =
-            "ayumu317/LiveCamera-LBS/1.5.0 (Android) (https://github.com/ayumu317/livecamera)";
+            "ayumu317/LiveCamera-LBS/2.0 (Android) (https://github.com/ayumu317/livecamera)";
     private static final int MIN_BANGUMI_SEARCH_SCORE = 20;
     private static final int BANGUMI_CONNECT_TIMEOUT_SECONDS = 5;
     private static final int BANGUMI_READ_TIMEOUT_SECONDS = 6;
@@ -408,7 +409,7 @@ public class AnitabiApiClient {
         if (exception instanceof IOException) {
             return exception;
         }
-        String typeName = type != null ? type.getTypeName() : "unknown";
+        String typeName = type != null ? type.toString() : "unknown";
         return new IOException("解析 " + typeName + " 失败: " + safeMessage(exception, "数据格式错误"), exception);
     }
 
@@ -613,7 +614,7 @@ public class AnitabiApiClient {
             return "";
         }
         return value
-                .toLowerCase()
+                .toLowerCase(Locale.ROOT)
                 .replace("學園", "学园")
                 .replace("校园", "学园")
                 .replace("同好會", "同好会")
