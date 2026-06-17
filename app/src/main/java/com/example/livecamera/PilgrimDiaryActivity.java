@@ -42,6 +42,8 @@ import java.util.concurrent.Executors;
 
 public class PilgrimDiaryActivity extends AppCompatActivity {
 
+    private static final String PRIVATE_DIARY_DIR_NAME = "livecamera_diary";
+
     private final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
     private final List<PilgrimRecord> currentRecords = new ArrayList<>();
 
@@ -209,6 +211,7 @@ public class PilgrimDiaryActivity extends AppCompatActivity {
                 AppDatabase.getInstance(PilgrimDiaryActivity.this)
                         .pilgrimDao()
                         .deleteById(record.id);
+                deletePrivateDiaryImage(record.localImageUri);
                 runSafelyOnUiThread(() -> {
                     Toast.makeText(PilgrimDiaryActivity.this, "已删除这条日记", Toast.LENGTH_SHORT).show();
                     loadRecords();
@@ -221,6 +224,30 @@ public class PilgrimDiaryActivity extends AppCompatActivity {
                 ).show());
             }
         });
+    }
+
+    private void deletePrivateDiaryImage(String localImageUri) {
+        if (isBlank(localImageUri)) {
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(localImageUri);
+            if (!"file".equalsIgnoreCase(uri.getScheme())) {
+                return;
+            }
+            File imageFile = new File(uri.getPath());
+            File parent = imageFile.getParentFile();
+            if (parent == null
+                    || !PRIVATE_DIARY_DIR_NAME.equals(parent.getName())
+                    || !imageFile.getName().startsWith("diary_")) {
+                return;
+            }
+            if (imageFile.exists() && !imageFile.delete()) {
+                android.util.Log.w("PilgrimDiary", "Unable to delete diary image copy");
+            }
+        } catch (Exception ignored) {
+            android.util.Log.w("PilgrimDiary", "Invalid diary image path");
+        }
     }
 
     private void showExportFormatDialog() {

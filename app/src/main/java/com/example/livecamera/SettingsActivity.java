@@ -3,10 +3,13 @@ package com.example.livecamera;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -18,11 +21,11 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingsActivity extends AppCompatActivity {
 
-    private static final String PREFS_NAME = "livecamera_settings";
     private static final String PREF_DEFAULT_MODE = "default_identify_mode";
     private static final String PREF_PREVIEW_MODE = "preview_mode";
     private static final String PREF_SAVE_ACTION = "save_action";
     private static final String PREF_COLOR_THEME = "color_theme";
+    private static final String PREF_RECOGNITION_DEBUG_INFO = "recognition_debug_info";
     private static final String PREVIEW_FIT = "fit";
     private static final String PREVIEW_FILL = "fill";
     private static final String SAVE_ACTION_STAY = "stay";
@@ -35,8 +38,10 @@ public class SettingsActivity extends AppCompatActivity {
     private SharedPreferences settings;
     private MaterialCardView rowDefaultMode;
     private MaterialCardView rowPreviewMode;
+    private MaterialCardView rowRecognitionDebug;
     private MaterialCardView rowSaveAction;
     private MaterialCardView rowColorTheme;
+    private MaterialCardView rowManagementBackend;
     private MaterialCardView rowFeatureGuide;
 
     @Override
@@ -44,7 +49,7 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_settings);
-        settings = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        settings = getSharedPreferences(TourManagementBackendConfig.PREFS_NAME, MODE_PRIVATE);
         applyWindowInsets();
         bindViews();
         initListeners();
@@ -64,16 +69,20 @@ public class SettingsActivity extends AppCompatActivity {
         btnSettingsBack.setOnClickListener(view -> finish());
         rowDefaultMode = findViewById(R.id.rowDefaultMode);
         rowPreviewMode = findViewById(R.id.rowPreviewMode);
+        rowRecognitionDebug = findViewById(R.id.rowRecognitionDebug);
         rowSaveAction = findViewById(R.id.rowSaveAction);
         rowColorTheme = findViewById(R.id.rowColorTheme);
+        rowManagementBackend = findViewById(R.id.rowManagementBackend);
         rowFeatureGuide = findViewById(R.id.rowFeatureGuide);
     }
 
     private void initListeners() {
         rowDefaultMode.setOnClickListener(view -> chooseDefaultMode());
         rowPreviewMode.setOnClickListener(view -> choosePreviewMode());
+        rowRecognitionDebug.setOnClickListener(view -> toggleRecognitionDebugInfo());
         rowSaveAction.setOnClickListener(view -> chooseSaveAction());
         rowColorTheme.setOnClickListener(view -> chooseColorTheme());
+        rowManagementBackend.setOnClickListener(view -> openManagementBackendDialog());
         rowFeatureGuide.setOnClickListener(view -> startActivity(new Intent(this, FeatureGuideActivity.class)));
     }
 
@@ -91,6 +100,12 @@ public class SettingsActivity extends AppCompatActivity {
                 getPreviewModeLabel(getPreviewModeValue())
         );
         bindSettingRow(
+                rowRecognitionDebug,
+                "识别调试信息",
+                "显示候选排序来源、纠正命中和后台学习推荐依据",
+                getRecognitionDebugLabel()
+        );
+        bindSettingRow(
                 rowSaveAction,
                 "保存后动作",
                 "记录打卡成功后是否自动打开巡礼日记",
@@ -101,6 +116,12 @@ public class SettingsActivity extends AppCompatActivity {
                 "颜色主题",
                 "先作用于首页关键按钮和导航入口",
                 getColorThemeLabel(getColorThemeValue())
+        );
+        bindSettingRow(
+                rowManagementBackend,
+                "后台连接",
+                "用于账号登录、费用统计和系统增强数据同步",
+                getManagementBackendLabel()
         );
         bindSettingRow(
                 rowFeatureGuide,
@@ -143,6 +164,80 @@ public class SettingsActivity extends AppCompatActivity {
         showChoiceDialog("颜色主题", labels, values, getColorThemeValue(), PREF_COLOR_THEME);
     }
 
+    private void toggleRecognitionDebugInfo() {
+        boolean enabled = !isRecognitionDebugEnabled();
+        settings.edit().putBoolean(PREF_RECOGNITION_DEBUG_INFO, enabled).apply();
+        refreshSettingRows();
+        Toast.makeText(this, enabled ? "识别调试信息已开启" : "识别调试信息已关闭", Toast.LENGTH_SHORT).show();
+    }
+
+    private void openManagementBackendDialog() {
+        String[] actions = new String[] {"编辑后台地址", "恢复默认 Railway", "测试当前连接"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("后台连接")
+                .setMessage("当前地址：\n" + TourManagementBackendConfig.resolveBaseUrl(this))
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        showBackendEditDialog();
+                    } else if (which == 1) {
+                        TourManagementBackendConfig.clearOverride(this);
+                        refreshSettingRows();
+                        Toast.makeText(this, "已恢复默认 Railway 后台", Toast.LENGTH_SHORT).show();
+                    } else {
+                        testManagementBackendConnection();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showBackendEditDialog() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(TourManagementBackendConfig.resolveBaseUrl(this));
+        input.setSelection(input.getText().length());
+        input.setHint(TourManagementBackendConfig.DEFAULT_PUBLIC_BASE_URL);
+        int padding = Math.round(20 * getResources().getDisplayMetrics().density);
+        input.setPadding(padding, padding / 2, padding, padding / 2);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("编辑后台地址")
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String value = input.getText() == null ? "" : input.getText().toString();
+                    if (!TourManagementBackendConfig.isValidHttpUrl(value)) {
+                        Toast.makeText(this, "地址无效，请填写 http 或 https 地址", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    TourManagementBackendConfig.saveOverride(this, value);
+                    refreshSettingRows();
+                    Toast.makeText(this, "后台地址已保存，重新进入账号页后生效", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void testManagementBackendConnection() {
+        String baseUrl = TourManagementBackendConfig.resolveBaseUrl(this);
+        TourInfoApiClient client = new TourInfoApiClient(baseUrl);
+        client.getRecognitionAssist("Tokyo", TourAuthSession.LOCAL_APP_USER_ID, new TourInfoApiClient.ApiCallback<TourRecognitionAssistResponse>() {
+            @Override
+            public void onSuccess(TourRecognitionAssistResponse data) {
+                runOnUiThread(() -> {
+                    client.cancelAll();
+                    Toast.makeText(SettingsActivity.this, "后台连接正常：" + TourManagementBackendConfig.shortLabel(baseUrl), Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                runOnUiThread(() -> {
+                    client.cancelAll();
+                    Toast.makeText(SettingsActivity.this, "后台连接失败：" + valueOrDefault(exception.getMessage(), "无法连接"), Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
     private void showChoiceDialog(String title, String[] labels, String[] values, String currentValue, String prefKey) {
         int checked = 0;
         for (int i = 0; i < values.length; i++) {
@@ -169,7 +264,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private String getPreviewModeValue() {
-        return settings.getString(PREF_PREVIEW_MODE, PREVIEW_FIT);
+        return settings.getString(PREF_PREVIEW_MODE, PREVIEW_FILL);
     }
 
     private String getSaveActionValue() {
@@ -178,6 +273,19 @@ public class SettingsActivity extends AppCompatActivity {
 
     private String getColorThemeValue() {
         return settings.getString(PREF_COLOR_THEME, THEME_DEFAULT);
+    }
+
+    private boolean isRecognitionDebugEnabled() {
+        return settings.getBoolean(PREF_RECOGNITION_DEBUG_INFO, false);
+    }
+
+    private String getRecognitionDebugLabel() {
+        return isRecognitionDebugEnabled() ? "开启" : "关闭";
+    }
+
+    private String getManagementBackendLabel() {
+        String suffix = TourManagementBackendConfig.hasOverride(this) ? "自定义" : "默认";
+        return TourManagementBackendConfig.shortLabel(TourManagementBackendConfig.resolveBaseUrl(this)) + " · " + suffix;
     }
 
     private String getDefaultModeLabel(String value) {
@@ -209,5 +317,9 @@ public class SettingsActivity extends AppCompatActivity {
             return "深色预览";
         }
         return "默认蓝紫";
+    }
+
+    private String valueOrDefault(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 }

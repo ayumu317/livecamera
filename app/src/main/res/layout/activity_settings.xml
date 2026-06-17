@@ -126,6 +126,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp" />
 
+            <include
+                android:id="@+id/rowRecognitionDebug"
+                layout="@layout/item_settings_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -161,6 +168,26 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:includeFontPadding="false"
+                android:text="后台连接"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:ignore="HardcodedText" />
+
+            <include
+                android:id="@+id/rowManagementBackend"
+                layout="@layout/item_settings_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:visibility="gone" />
 
             <TextView
                 android:layout_width="match_parent"

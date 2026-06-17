@@ -11,6 +11,16 @@ val localProperties = Properties().apply {
     }
 }
 
+fun buildConfigBoolean(name: String, defaultValue: Boolean = false): Boolean {
+    val value = (project.findProperty(name) as String?)
+        ?: localProperties.getProperty(name)
+        ?: return defaultValue
+    return value.equals("true", ignoreCase = true)
+            || value == "1"
+            || value.equals("yes", ignoreCase = true)
+            || value.equals("on", ignoreCase = true)
+}
+
 fun buildConfigString(name: String, defaultValue: String = ""): String {
     val value = (project.findProperty(name) as String?)
         ?: localProperties.getProperty(name)
@@ -32,8 +42,8 @@ android {
         applicationId = "com.example.livecamera"
         minSdk = 24
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.5.0"
+        versionCode = 20
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "ARK_API_KEY", "\"${buildConfigString("ARK_API_KEY")}\"")
@@ -43,9 +53,13 @@ android {
         buildConfigField("String", "DOUBAO_API_KEY", "\"${buildConfigString("DOUBAO_API_KEY")}\"")
         buildConfigField("String", "DOUBAO_MODEL", "\"${buildConfigString("DOUBAO_MODEL")}\"")
         buildConfigField("String", "NGROK_BASE_URL", "\"${buildConfigString("NGROK_BASE_URL")}\"")
+        buildConfigField("String", "MANAGEMENT_BASE_URL", "\"${buildConfigString("MANAGEMENT_BASE_URL", "https://backend-production-d4a53.up.railway.app")}\"")
         buildConfigField("String", "SERPAPI_KEY", "\"${buildConfigString("SERPAPI_KEY")}\"")
-        buildConfigField("String", "TENCENT_MAP_SDK_KEY", "\"${buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")}\"")
-        manifestPlaceholders["TencentMapSDK_KEY"] = buildConfigString("TENCENT_MAP_SDK_KEY", "60e19a9ee01fdc4ee0f940aa661ac76e")
+        buildConfigField("String", "TENCENT_MAP_SDK_KEY", "\"${buildConfigString("TENCENT_MAP_SDK_KEY")}\"")
+        buildConfigField("String", "SERPAPI_COST_CNY_PER_SEARCH", "\"${buildConfigString("SERPAPI_COST_CNY_PER_SEARCH")}\"")
+        buildConfigField("String", "TENCENT_LOCATION_COST_CNY_PER_CALL", "\"${buildConfigString("TENCENT_LOCATION_COST_CNY_PER_CALL")}\"")
+        buildConfigField("String", "LOCATION_GATEWAY_COST_CNY_PER_CALL", "\"${buildConfigString("LOCATION_GATEWAY_COST_CNY_PER_CALL")}\"")
+        manifestPlaceholders["TencentMapSDK_KEY"] = buildConfigString("TENCENT_MAP_SDK_KEY")
     }
 
     buildTypes {
@@ -65,6 +79,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -82,6 +100,8 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
     testImplementation(libs.junit)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }
@@ -94,5 +114,7 @@ val startNgrok by tasks.registering(Exec::class) {
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {
-    dependsOn(startNgrok)
+    if (buildConfigBoolean("ENABLE_NGROK_PREBUILD", false)) {
+        dependsOn(startNgrok)
+    }
 }

@@ -23,7 +23,6 @@ public class SerpApiClient {
 
     private static final String DEBUG_TAG = "TOUR_DEBUG";
     private static final String SERP_API_BASE_URL = "https://serpapi.com/search.json";
-    private static final String HARDCODED_SERP_API_KEY = "b1708ea9c1c5b592f10e4fa7661788b72c27d4fab8a590244596d1daf454e5c8";
 
     private final OkHttpClient okHttpClient;
 
@@ -42,12 +41,16 @@ public class SerpApiClient {
     }
 
     public void fetchFallbackImage(String animeName, String locationName, Callback callback) {
+        fetchImageByQuery(buildQuery(animeName, locationName), callback);
+    }
+
+    public void fetchImageByQuery(String query, Callback callback) {
         if (callback == null) {
             return;
         }
-        if (isBlank(HARDCODED_SERP_API_KEY)
-                || "请在这里直接填入你的真实 SerpApi Key".equals(HARDCODED_SERP_API_KEY)) {
-            callback.onFailure(new IllegalStateException("请先在 SerpApiClient 中硬编码填入真实的 SerpApi Key"));
+        String apiKey = BuildConfig.SERPAPI_KEY;
+        if (isBlank(apiKey)) {
+            callback.onFailure(new IllegalStateException("请先在 local.properties 中配置 SERPAPI_KEY"));
             return;
         }
 
@@ -57,14 +60,18 @@ public class SerpApiClient {
             return;
         }
 
-        String query = buildQuery(animeName, locationName);
+        String safeQuery = query == null ? "" : query.trim();
+        if (isBlank(safeQuery)) {
+            callback.onFailure(new IllegalArgumentException("SerpApi 搜图关键词为空"));
+            return;
+        }
         HttpUrl url = baseUrl.newBuilder()
                 .addQueryParameter("engine", "google_images")
-                .addQueryParameter("q", query)
-                .addQueryParameter("api_key", HARDCODED_SERP_API_KEY)
+                .addQueryParameter("q", safeQuery)
+                .addQueryParameter("api_key", apiKey)
                 .build();
 
-        Log.d(DEBUG_TAG, "SerpApi 搜图关键词: " + query);
+        Log.d(DEBUG_TAG, "SerpApi 搜图关键词: " + safeQuery);
 
         Request request = new Request.Builder()
                 .url(url)

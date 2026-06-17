@@ -132,7 +132,7 @@
                         android:layout_height="0dp"
                         android:background="@color/image_placeholder"
                         android:contentDescription="@string/cd_preview_image"
-                        android:scaleType="fitCenter"
+                        android:scaleType="centerCrop"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
@@ -444,10 +444,86 @@
                         tools:text="现实地点名称占位：如果地点名和副标题很长，也要避免把下面的图片挤坏" />
 
                     <LinearLayout
+                        android:id="@+id/layoutNextStepHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="14dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="14dp"
+                        android:paddingBottom="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvNextStepHint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:breakStrategy="high_quality"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="3dp"
+                            android:textColor="@color/text_body"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            tools:text="下一步：结果较明确，可以保存打卡。" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutWorkInfo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingTop="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="16dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvWorkInfoTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:text="作品信息"
+                            android:textColor="@color/text_primary"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <com.google.android.material.imageview.ShapeableImageView
+                            android:id="@+id/iv_work_cover"
+                            android:layout_width="match_parent"
+                            android:layout_height="190dp"
+                            android:layout_marginTop="12dp"
+                            android:background="@color/image_placeholder"
+                            android:contentDescription="作品图片"
+                            android:scaleType="centerCrop"
+                            android:visibility="gone"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+                            tools:ignore="HardcodedText"
+                            tools:src="@android:drawable/screen_background_light_transparent" />
+
+                        <TextView
+                            android:id="@+id/tvWorkInfo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:breakStrategy="high_quality"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="5dp"
+                            android:textColor="@color/text_body"
+                            android:textSize="15sp"
+                            tools:text="中文名：LoveLive! 虹咲学园学园偶像同好会&#10;原名：ラブライブ！虹ヶ咲学園スクールアイドル同好会&#10;类型：TV&#10;简介：作品简介会显示在这里。" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/layoutOverseasContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
+                        android:layout_marginTop="14dp"
                         android:background="@drawable/bg_overseas_film"
                         android:elevation="4dp"
                         android:orientation="horizontal"
@@ -518,7 +594,7 @@
                                 android:paddingTop="6dp"
                                 android:paddingEnd="12dp"
                                 android:paddingBottom="6dp"
-                                android:text="🎬 圣地巡礼"
+                                android:text="圣地巡礼"
                                 android:textColor="@android:color/white"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
@@ -570,7 +646,7 @@
                                 android:includeFontPadding="false"
                                 android:text="@string/label_ai_commentary"
                                 android:textColor="#FFBE82"
-                                android:textSize="12sp"
+                                android:textSize="11sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -582,8 +658,8 @@
                                 android:hyphenationFrequency="normal"
                                 android:lineSpacingExtra="6dp"
                                 android:text="@string/result_summary_placeholder"
-                                android:textColor="#E7EBF3"
-                                android:textSize="15sp"
+                                android:textColor="#C6CDD9"
+                                android:textSize="13sp"
                                 tools:text="AI 解说占位：这里可能出现较长的巡礼导览内容，例如该镜头对应的集数、剧情上下文、取景角度、建议打卡站位与时间段。文本需要自然换行，并且依赖外层 NestedScrollView 承载长内容，而不是把卡片内部撑坏。" />
 
                             <TextView
@@ -594,7 +670,7 @@
                                 android:breakStrategy="high_quality"
                                 android:lineSpacingExtra="5dp"
                                 android:textColor="#A7AFBF"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:visibility="gone"
                                 tools:text="补充信息：例如截图时间点、Anitabi 收录地标数、路线提示等。" />
                         </LinearLayout>
@@ -668,9 +744,21 @@
                             android:paddingTop="6dp"
                             android:paddingEnd="12dp"
                             android:paddingBottom="6dp"
-                            android:text="📍 国内漫游"
+                            android:text="国内旅行"
                             android:textColor="#4F8A66"
                             android:textSize="12sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvDomesticPanelTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:includeFontPadding="false"
+                            android:text="旅行目的地"
+                            android:textColor="#315A42"
+                            android:textSize="20sp"
                             android:textStyle="bold"
                             tools:ignore="HardcodedText" />
 
@@ -678,7 +766,7 @@
                             android:id="@+id/tvDomesticAddressLabel"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="16dp"
+                            android:layout_marginTop="14dp"
                             android:includeFontPadding="false"
                             android:text="@string/label_domestic_address"
                             android:textColor="@color/text_primary"
@@ -730,6 +818,42 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/layoutBackendCost"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_next_step_neutral"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingTop="14dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="14dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvBackendCostTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:text="后台计费"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText" />
+
+                        <TextView
+                            android:id="@+id/tvBackendCost"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:includeFontPadding="false"
+                            android:lineSpacingExtra="4dp"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            tools:text="AI 模型：0.0028 CNY&#10;地图服务：0.0000 CNY&#10;其他接口：0.0000 CNY&#10;合计：0.0028 CNY" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/layoutResultActions"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -754,6 +878,24 @@
                             app:backgroundTint="@color/brand_primary"
                             app:cornerRadius="18dp"
                             app:rippleColor="@color/cta_ripple" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnConfirmAnimeResult"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:minHeight="48dp"
+                            android:text="确定此结果"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            app:backgroundTint="@color/brand_primary"
+                            app:cornerRadius="18dp"
+                            app:rippleColor="@color/cta_ripple"
+                            tools:ignore="HardcodedText" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnNextOption"
@@ -845,17 +987,31 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:baselineAligned="false"
-                            android:orientation="horizontal">
+                            android:orientation="vertical">
 
                             <EditText
                                 android:id="@+id/etManualAnimeName"
-                                android:layout_width="0dp"
+                                android:layout_width="match_parent"
                                 android:layout_height="48dp"
-                                android:layout_marginEnd="8dp"
-                                android:layout_weight="1"
                                 android:backgroundTint="@color/card_stroke"
-                                android:hint="输入作品名或地点"
+                                android:hint="作品名（可选）"
+                                android:imeOptions="actionNext"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:paddingStart="12dp"
+                                android:paddingEnd="12dp"
+                                android:textColor="@color/text_primary"
+                                android:textColorHint="@color/text_secondary"
+                                android:textSize="14sp"
+                                tools:ignore="HardcodedText" />
+
+                            <EditText
+                                android:id="@+id/etManualLocationName"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
+                                android:backgroundTint="@color/card_stroke"
+                                android:hint="地点线索 / 正确地点（可选）"
                                 android:imeOptions="actionSearch"
                                 android:inputType="text"
                                 android:maxLines="1"
@@ -868,8 +1024,9 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnSearchManualAnime"
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="48dp"
+                                android:layout_marginTop="10dp"
                                 android:minHeight="48dp"
                                 android:text="重新匹配"
                                 android:textAllCaps="false"
